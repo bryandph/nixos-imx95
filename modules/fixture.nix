@@ -45,6 +45,8 @@
         bootContainerName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all";
         sdImage = board.config.system.build.frdmImx95SdImage;
         bootContainerOffsetBytes = board.config.hardware.nxp.imx95.bootContainerOffsetKiB * 1024;
+        ubootEnvironmentOffsetBytes =
+          board.config.hardware.nxp.imx95.ubootEnvironmentOffsetKiB * 1024;
         firmwareOffsetBytes = board.config.sdImage.firmwarePartitionOffset * 1024 * 1024;
         rootOffsetBytes =
           (board.config.sdImage.firmwarePartitionOffset + board.config.sdImage.firmwareSize)
@@ -64,8 +66,28 @@
               freescale/imx95-15x15-frdm.dtb
             test ${lib.escapeShellArg board.config.fileSystems."/".device} = \
               /dev/disk/by-label/NIXOS_SD
-            test ${lib.escapeShellArg board.config.fileSystems."/boot/firmware".device} = \
+            test ${lib.escapeShellArg board.config.fileSystems."/boot".device} = \
               /dev/disk/by-label/BOOT
+            test ${
+              if builtins.hasAttr "/boot/firmware" board.config.fileSystems
+              then "1"
+              else "0"
+            } = 0
+            test ${
+              if lib.hasInfix ''-N "$partNum"'' board.config.systemd.services.expand-root-partition.script
+              then "1"
+              else "0"
+            } = 1
+            test ${
+              if lib.hasInfix "/sys/dev/block/" board.config.systemd.services.expand-root-partition.script
+              then "1"
+              else "0"
+            } = 1
+            test ${
+              if lib.hasInfix "-nr -o MAJ:MIN" board.config.systemd.services.expand-root-partition.script
+              then "1"
+              else "0"
+            } = 1
             test ${
               if sdImage.allowSubstitutes
               then "1"
@@ -116,14 +138,28 @@
                 ${lib.getExe pkgs.jq} -r '.partitiontable.partitions[0].start')
               secondStart=$(sfdisk --json image.img |
                 ${lib.getExe pkgs.jq} -r '.partitiontable.partitions[1].start')
+              firstBootable=$(sfdisk --json image.img |
+                ${lib.getExe pkgs.jq} -r '.partitiontable.partitions[0].bootable')
+              secondBootable=$(sfdisk --json image.img |
+                ${lib.getExe pkgs.jq} -r '.partitiontable.partitions[1].bootable // false')
 
               test "$firstStart" -eq $(( ${toString firmwareOffsetBytes} / 512 ))
               test "$secondStart" -eq $(( ${toString rootOffsetBytes} / 512 ))
+              test "$firstBootable" = true
+              test "$secondBootable" = false
 
               dd if=image.img bs=1 skip=${toString bootContainerOffsetBytes} \
                 count=${toString board.config.hardware.nxp.imx95.bootContainerSizeBytes} \
                 status=none |
                 cmp - "${bootContainer}/${bootContainerName}"
+
+              dd if=image.img bs=1 skip=${toString ubootEnvironmentOffsetBytes} \
+                count=${toString board.config.hardware.nxp.imx95.ubootEnvironmentSizeBytes} \
+                status=none > uboot.env
+              grep -a -q 'bootcmd=bootflow scan -lb' uboot.env
+              grep -a -q 'boot_prefixes=/' uboot.env
+              grep -a -q 'fdt_addr_r=0x95000000' uboot.env
+              grep -a -q 'ramdisk_addr_r=0x98000000' uboot.env
 
               mtype -i image.img@@${toString firmwareOffsetBytes} \
                 ::/extlinux/extlinux.conf > extlinux.conf

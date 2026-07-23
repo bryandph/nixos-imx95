@@ -4,13 +4,13 @@
   runCommand,
 }: let
   pname = "nxp-imx95-boot-container";
-  version = "6.18.2-1.0.0";
+  version = "6.18.20-2.0.0";
   fileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all";
-  expectedSize = 2829312;
-  expectedHash = "sha256-/fs06wgKQFft5nRABkRwam9zw2NcDFEFEKfDvfpz/eY=";
-  sourceArchiveName = "LF_v6.18.2-1.0.0_images_IMX95.zip";
-  sourceArchiveHash = "sha256-KkVqJz/o6WeNj9fgy/O1L2x67/U/QAF9c1CV2rKbuwc=";
-  downloadPage = "https://www.nxp.com/webapp/Download?colCode=L6.18.2-1.0.0_MX95&appType=license";
+  expectedSize = 2976768;
+  expectedHash = "sha256-cIRAg/mrMAqqJawvRW/kK/FZdCsVtPuGvaRTDeZyhSk=";
+  sourceArchiveName = "LF_v6.18.20-2.0.0_images_IMX95EVK.zip";
+  sourceArchiveHash = "sha256-dhSboHropC4ypSpGHyHZDIjvRPGm953nt6/oVTah6QM=";
+  downloadPage = "https://www.nxp.com/webapp/Download?colCode=L6.18.20-2.0.0_MX95&appType=license";
 
   nxpLicense =
     lib.licenses.unfree

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-archive_name="LF_v6.18.2-1.0.0_images_IMX95.zip"
-archive_sha256="2a456a273fe8e9678d8fd7e0cbf3b52f6c7aeff53f40017d735095dab29bbb07"
+archive_name="LF_v6.18.20-2.0.0_images_IMX95EVK.zip"
+archive_sha256="76149ba07ae8a42e32a52a461f21d90c88ef44f1a6f79de7b7afe85536a1e903"
 member_name="imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all"
-member_sha256="fdfb34eb080a4057ede674400644706a6f73c3635c0c510510a7c3bdfa73fde6"
-member_size="2829312"
+member_sha256="70844083f9ab300aaa25ac2f456fe42bf159742b15b4fb86bda4530de6728529"
+member_size="2976768"
 
 usage() {
   echo "usage: $0 /path/to/$archive_name" >&2

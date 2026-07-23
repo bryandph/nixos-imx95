@@ -14,7 +14,7 @@ This repository is public, but the required NXP boot container is not.
 
 The repository's MIT license applies only to the original source code here.
 The NXP BSP archive and the extracted boot container remain governed by the
-license accepted on NXP's download page. The LF6.18.2 Software Content
+license accepted on NXP's download page. The LF6.18.20 Software Content
 Register grants its distribution rights only under the conditions in Section
 2.3 of NXP's license, including distribution as part of an authorized
 NXP-based system rather than as a standalone artifact.
@@ -34,18 +34,18 @@ This is a conservative engineering policy, not legal advice.
 ## Import the licensed boot container
 
 1. Sign in to NXP, accept the license, and download
-   `L6.18.2-1.0.0_MX95` from the
-   [official download page](https://www.nxp.com/webapp/Download?colCode=L6.18.2-1.0.0_MX95&appType=license).
+   `L6.18.20-2.0.0_MX95` from the
+   [official download page](https://www.nxp.com/webapp/Download?colCode=L6.18.20-2.0.0_MX95&appType=license).
 2. Import exactly the FRDM boot-container member:
 
    ```console
    ./scripts/import-nxp-boot-container \
-     ~/Downloads/LF_v6.18.2-1.0.0_images_IMX95.zip
+     ~/Downloads/LF_v6.18.20-2.0.0_images_IMX95EVK.zip
    ```
 
-The helper verifies the 8.5 GB source archive, extracts only
+The helper verifies the complete source archive, extracts only
 `imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all`, verifies its size and
-hash, and adds only that 2.8 MB file to the local Nix store. It does not copy
+hash, and adds only that 3 MB file to the local Nix store. It does not copy
 either artifact into the checkout.
 
 ## Build
@@ -63,9 +63,15 @@ non-redistributable, no-substitutes metadata required by the embedded NXP
 artifact.
 
 The image reserves the first 8 MiB, installs the NXP boot container at the
-vendor-defined 32 KiB offset, creates a 512 MiB FAT `BOOT` partition containing
-generation-aware extlinux entries, and uses an ext4 `NIXOS_SD` root by stable
-filesystem identity.
+vendor-defined 32 KiB offset, and installs a generated U-Boot environment at
+NXP's 7 MiB offset. The environment supplies non-overlapping kernel, DTB, and
+initrd load addresses and makes bootflow consume the generation-aware extlinux
+entry at the FAT root. The 512 MiB FAT `BOOT` partition is marked active for
+NXP U-Boot and mounts at `/boot`, so later NixOS generations update the
+extlinux entry on the real boot filesystem. The ext4 root uses the stable
+`NIXOS_SD` identity and expands on first boot by resolving its kernel
+major/minor identity through sysfs rather than assuming a device-node minor
+number.
 
 No flashing app is provided. Verify the target block device independently
 before writing the resulting image.
@@ -95,10 +101,8 @@ and deterministic image layout.
 
 ## Source pointers
 
-- NXP release manifest:
-  [`imx-6.18.2-1.0.0.xml`](https://github.com/nxp-imx/imx-manifest/blob/imx-linux-whinlatter/imx-6.18.2-1.0.0.xml)
-- NXP machine data:
-  [`imx95-evk.inc`](https://github.com/nxp-imx/meta-imx/blob/rel_imx_6.18.2_1.0.0/meta-imx-bsp/conf/machine/include/imx95-evk.inc)
+- NXP U-Boot FRDM configuration:
+  [`imx95_15x15_frdm_defconfig`](https://github.com/nxp-imx/uboot-imx/blob/lf_v2025.04/configs/imx95_15x15_frdm_defconfig)
 - Release WIC layout:
   [`imx-imx-boot-bootpart.wks.in`](https://github.com/Freescale/meta-freescale/blob/2781242e499e601ef9454009aceed16186a48d9e/wic/imx-imx-boot-bootpart.wks.in)
 - Board guide:
