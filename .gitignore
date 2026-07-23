@@ -1,0 +1,10 @@
+/.direnv/
+/result
+/result-*
+
+# NXP's BSP bundle and derived boot containers are licensed artifacts.
+# They must never be committed or published by this repository.
+*.bin
+*.img
+*.img.zst
+*.zip

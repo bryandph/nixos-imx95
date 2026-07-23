@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+archive_name="LF_v6.18.2-1.0.0_images_IMX95.zip"
+archive_sha256="2a456a273fe8e9678d8fd7e0cbf3b52f6c7aeff53f40017d735095dab29bbb07"
+member_name="imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all"
+member_sha256="fdfb34eb080a4057ede674400644706a6f73c3635c0c510510a7c3bdfa73fde6"
+member_size="2829312"
+
+usage() {
+  echo "usage: $0 /path/to/$archive_name" >&2
+}
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+if [ "$#" -ne 1 ]; then
+  usage
+  exit 2
+fi
+
+archive=$1
+if [ ! -f "$archive" ]; then
+  echo "NXP BSP archive not found: $archive" >&2
+  exit 1
+fi
+
+for command_name in unzip nix-store awk; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "required command not found: $command_name" >&2
+    exit 1
+  fi
+done
+
+actual_archive_hash=$(hash_file "$archive")
+if [ "$actual_archive_hash" != "$archive_sha256" ]; then
+  echo "NXP BSP archive hash mismatch" >&2
+  echo "expected: $archive_sha256" >&2
+  echo "actual:   $actual_archive_hash" >&2
+  exit 1
+fi
+
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/nixos-imx95.XXXXXX")
+trap 'rm -rf -- "$tmp_dir"' EXIT
+
+boot_container="$tmp_dir/$member_name"
+unzip -p "$archive" "$member_name" >"$boot_container"
+
+actual_member_size=$(wc -c <"$boot_container" | tr -d ' ')
+if [ "$actual_member_size" != "$member_size" ]; then
+  echo "NXP boot-container size mismatch" >&2
+  echo "expected: $member_size" >&2
+  echo "actual:   $actual_member_size" >&2
+  exit 1
+fi
+
+actual_member_hash=$(hash_file "$boot_container")
+if [ "$actual_member_hash" != "$member_sha256" ]; then
+  echo "NXP boot-container hash mismatch" >&2
+  echo "expected: $member_sha256" >&2
+  echo "actual:   $actual_member_hash" >&2
+  exit 1
+fi
+
+store_path=$(nix-store --add-fixed sha256 "$boot_container")
+echo "Imported licensed NXP boot container into the local Nix store:"
+echo "$store_path"
+echo
+echo "Do not publish this store path, upload it to a binary cache, or attach it to a release."
