@@ -5,8 +5,9 @@ the NXP FRDM-i.MX95.
 
 The initial implementation deliberately keeps NXP's AHAB firmware container
 and downstream U-Boot while booting a mainline NixOS kernel and the upstream
-`freescale/imx95-15x15-frdm.dtb` through extlinux. It produces an SD image and
-does not modify eMMC.
+`freescale/imx95-15x15-frdm.dtb` through extlinux. It produces a raw image for
+SD-first acceptance and guarded installation to eMMC. Builds never modify a
+device.
 
 ## License boundary
 
@@ -73,8 +74,115 @@ extlinux entry on the real boot filesystem. The ext4 root uses the stable
 major/minor identity through sysfs rather than assuming a device-node minor
 number.
 
-No flashing app is provided. Verify the target block device independently
-before writing the resulting image.
+No flashing app is provided. The manual eMMC procedure below requires an
+independently verified target.
+
+## Install an accepted image to eMMC
+
+Treat eMMC installation as two separate writes: the generated image goes to
+the eMMC user area, while NXP's signed boot container goes to eMMC boot
+partition 1 through the ROM's USB serial downloader. The latter step removes
+any dependency on a factory-installed boot container that happened to remain
+in the hardware boot partition.
+
+First boot and accept the image from SD. Keep that card unchanged as the
+recovery path. From the running SD system:
+
+1. Use `findmnt /`, `findmnt /boot`, `lsblk`, and
+   `/sys/block/mmcblk*/device/type` to distinguish the mounted SD device from
+   the inactive eMMC. Do not infer the target from a previously observed
+   `mmcblk` number.
+2. Save the eMMC user area, both hardware boot partitions
+   (`mmcblkXboot0` and `mmcblkXboot1`), the partition table, sizes, and hashes
+   to separate recovery storage. A backup of `mmcblkX` alone does **not**
+   include the hardware boot partitions.
+3. Prove that the retained SD card still boots before writing eMMC.
+4. Decompress the accepted image into the independently verified, unmounted
+   eMMC user-area device. Flush it, then hash exactly the image-length prefix
+   read back from that device and compare it with the decompressed image.
+
+For example, after replacing both placeholders with paths established during
+the preflight:
+
+```console
+image=/path/to/nixos-frdm-imx95.img.zst
+target=/dev/mmcblkX  # replace X only after completing the preflight
+
+image_bytes="$(zstd -dc "$image" | wc -c)"
+image_sha256="$(zstd -dc "$image" | sha256sum | cut -d' ' -f1)"
+zstd -dc "$image" | sudo dd of="$target" bs=4M conv=fsync status=progress
+sudo blockdev --flushbufs "$target"
+sudo head -c "$image_bytes" "$target" | sha256sum
+```
+
+The final hash must equal `$image_sha256`. Power off after verification.
+Because SD and eMMC copies use the same `BOOT` and `NIXOS_SD` identities,
+remove the SD card before accepting the eMMC boot.
+
+### Program the eMMC hardware boot partition
+
+Use a Linux host for the tested UUU path. On macOS 26, UUU may fail to claim
+the ROM device because of the open
+[libusb/HID regression](https://github.com/nxp-imx/mfgtools/issues/510).
+
+1. Build the current licensed container and resolve its output dynamically:
+
+   ```console
+   boot_output="$(
+     nix build --impure -j 1 --no-link --print-out-paths \
+       .#packages.aarch64-linux.nxp-imx95-boot-container
+   )"
+   boot_container="$boot_output/imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all"
+   ```
+
+2. With power off, connect the board's USB1/J3 port to the Linux host and
+   select serial-download boot as described by NXP's board guide. After a
+   complete power cycle, UUU must identify the device as `MX95` using the
+   `SDPS` protocol:
+
+   ```console
+   uuu_output="$(
+     nix build --impure --no-link --print-out-paths nixpkgs#uuu
+   )"
+   sudo "$uuu_output/bin/uuu" -lsusb
+   ```
+
+3. Program only the bootloader:
+
+   ```console
+   sudo "$uuu_output/bin/uuu" -b emmc "$boot_container"
+   ```
+
+The tested `-b emmc` flow writes boot partition 1 and selects it in eMMC
+`PARTITION_CONFIG`; it does not rewrite the user area installed above. UUU
+also provides an `emmc_all` workflow, but this repository has not validated
+that path with the generated compressed NixOS image.
+
+Return the switches to eMMC boot, disconnect the serial-download cable if
+necessary, and power-cycle. Accept the result only after:
+
+- the boot-container-length prefix of `mmcblkXboot0` hashes identically to the
+  locally built container;
+- `mmc extcsd read` reports boot partition 1 enabled;
+- `/` and `/boot` resolve to the eMMC partitions and the root filesystem has
+  expanded;
+- all six A55 CPUs, MAC-based DHCP, and the expected NixOS generation are
+  present;
+- `systemctl --failed` is empty; and
+- a second eMMC boot passes the same checks.
+
+Rollback means powering off, reinserting the retained accepted SD card, and
+selecting SD boot. Keep the user-area and boot-partition backups offline.
+
+Factory restoration is a separate, reviewed operation. Boot the accepted SD,
+repeat the device-identity preflight, and verify every saved artifact before
+writing anything. Restore the user-area image only to the inactive eMMC user
+area. Restore `boot0` and `boot1` to their matching hardware partitions,
+temporarily clearing each partition's `force_ro` sysfs control only for its
+write and restoring it immediately afterward. Reapply the saved eMMC boot
+configuration if it differs, then perform length-limited readback hashes of
+all three areas before selecting eMMC boot. Neither the backups nor licensed
+NXP artifacts may be published.
 
 ## Consumer modules
 
