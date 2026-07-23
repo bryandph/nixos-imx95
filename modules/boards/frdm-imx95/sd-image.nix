@@ -7,17 +7,41 @@
     ...
   }: let
     cfg = config.hardware.nxp.imx95;
-    bootContainerName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all";
+    defaultBootContainer = pkgs.callPackage ../../../packages/nxp-imx95-boot-container.nix {};
+    provider =
+      if cfg.bootContainer == null
+      then {}
+      else cfg.bootContainer;
+    requiredProviderMetadata = [
+      "bootContainerOffsetKiB"
+      "componentManifest"
+      "containsM7Application"
+      "expectedHash"
+      "expectedSha256"
+      "expectedSize"
+      "fileName"
+      "providerKind"
+      "providerLicense"
+      "release"
+      "reservedBootRegionMiB"
+      "ubootEnvironmentOffsetKiB"
+      "ubootEnvironmentSizeBytes"
+    ];
+    hasProviderMetadata =
+      lib.all (name: builtins.hasAttr name provider) requiredProviderMetadata;
+    bootContainerName = provider.fileName or "missing-provider-file-name";
     bootContainerPath =
       if cfg.bootContainer == null
       then "/dev/null"
       else "${cfg.bootContainer}/${bootContainerName}";
     unfreeLicense =
-      lib.licenses.unfree
-      // {
-        fullName = "NXP Software License Agreement (LA_OPT_NXP_Software_License v63, May 2025)";
-        redistributable = false;
-      };
+      provider.providerLicense or (
+        lib.licenses.unfree
+        // {
+          fullName = "NXP Software License Agreement (LA_OPT_NXP_Software_License v63, May 2025)";
+          redistributable = false;
+        }
+      );
     offsetBytes = cfg.bootContainerOffsetKiB * 1024;
     environmentOffsetBytes = cfg.ubootEnvironmentOffsetKiB * 1024;
     reservedBytes = cfg.reservedBootRegionMiB * 1024 * 1024;
@@ -29,52 +53,70 @@
     options.hardware.nxp.imx95 = {
       bootContainer = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
-        default = pkgs.callPackage ../../../packages/nxp-imx95-boot-container.nix {};
-        defaultText = lib.literalExpression "pkgs.callPackage <nixos-imx95 boot-container package> {}";
+        default = defaultBootContainer;
+        defaultText = lib.literalExpression "pkgs.callPackage <nixos-imx95 boot-container provider> {}";
         description = ''
-          Hash-verified, operator-supplied NXP AHAB boot-container package.
-          This artifact is unfree and must not be redistributed standalone.
+          Boot-container provider implementing the nixos-imx95 metadata
+          contract. Providers may assemble from source plus granular licensed
+          firmware or wrap a hash-verified complete NXP container.
         '';
       };
 
       bootContainerOffsetKiB = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 32;
         readOnly = true;
-        description = "Vendor-defined raw SD offset for the i.MX95 boot container.";
+        description = "Provider-declared raw SD offset for the i.MX95 boot container.";
       };
 
       bootContainerSizeBytes = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 2976768;
         readOnly = true;
-        description = "Expected size of the pinned LF6.18.20 FRDM boot container.";
+        description = "Provider-declared size of the selected boot container.";
       };
 
       ubootEnvironmentOffsetKiB = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 7 * 1024;
         readOnly = true;
-        description = "NXP U-Boot raw MMC environment offset.";
+        description = "Provider-declared NXP U-Boot raw MMC environment offset.";
       };
 
       ubootEnvironmentSizeBytes = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 16 * 1024;
         readOnly = true;
-        description = "NXP U-Boot raw MMC environment size.";
+        description = "Provider-declared NXP U-Boot raw MMC environment size.";
       };
 
       reservedBootRegionMiB = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 8;
         readOnly = true;
-        description = "Raw region reserved before the first filesystem partition.";
+        description = "Provider-declared raw region before the first filesystem partition.";
       };
     };
 
     config = {
+      hardware.nxp.imx95 = {
+        bootContainerOffsetKiB = provider.bootContainerOffsetKiB or 1;
+        bootContainerSizeBytes = provider.expectedSize or 1;
+        reservedBootRegionMiB = provider.reservedBootRegionMiB or 1;
+        ubootEnvironmentOffsetKiB = provider.ubootEnvironmentOffsetKiB or 1;
+        ubootEnvironmentSizeBytes = provider.ubootEnvironmentSizeBytes or 1;
+      };
+
       assertions = [
+        {
+          assertion = hasProviderMetadata;
+          message = ''
+            The selected FRDM-i.MX95 boot-container package does not implement
+            the required provider metadata contract.
+          '';
+        }
+        {
+          assertion = (provider.providerLicense.redistributable or true) == false;
+          message = ''
+            The selected FRDM-i.MX95 boot-container provider must retain the
+            non-redistributable NXP license boundary.
+          '';
+        }
         {
           assertion = cfg.bootContainer != null;
           message = ''
@@ -141,17 +183,14 @@
 
         postBuildCommands = ''
           bootContainer=${lib.escapeShellArg bootContainerPath}
-          actualSize=$(stat -c %s "$bootContainer")
-
-          if [ "$actualSize" -ne ${toString cfg.bootContainerSizeBytes} ]; then
-            echo "NXP boot container has size $actualSize; expected ${toString cfg.bootContainerSizeBytes}" >&2
-            exit 1
-          fi
-
-          if [ $(( ${toString offsetBytes} + actualSize )) -gt ${toString reservedBytes} ]; then
-            echo "NXP boot container overlaps the first partition" >&2
-            exit 1
-          fi
+          ${lib.getExe pkgs.bash} \
+            ${../../../scripts/check-imx95-boot-container} \
+            "$bootContainer" \
+            ${lib.escapeShellArg (provider.expectedSha256 or "missing")} \
+            ${toString cfg.bootContainerSizeBytes} \
+            ${toString offsetBytes} \
+            ${toString reservedBytes} \
+            ${toString environmentOffsetBytes}
 
           dd if="$bootContainer" of="$img" bs=1024 \
             seek=${toString cfg.bootContainerOffsetKiB} conv=notrunc,fsync status=none

@@ -8,6 +8,7 @@
   fileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all";
   expectedSize = 2976768;
   expectedHash = "sha256-cIRAg/mrMAqqJawvRW/kK/FZdCsVtPuGvaRTDeZyhSk=";
+  expectedSha256 = "70844083f9ab300aaa25ac2f456fe42bf159742b15b4fb86bda4530de6728529";
   sourceArchiveName = "LF_v6.18.20-2.0.0_images_IMX95EVK.zip";
   sourceArchiveHash = "sha256-dhSboHropC4ypSpGHyHZDIjvRPGm953nt6/oVTah6QM=";
   downloadPage = "https://www.nxp.com/webapp/Download?colCode=L6.18.20-2.0.0_MX95&appType=license";
@@ -48,13 +49,27 @@ in
       inherit
         downloadPage
         expectedHash
+        expectedSha256
         expectedSize
         fileName
         sourceArchiveHash
         sourceArchiveName
         ;
       bootContainerOffsetKiB = 32;
+      componentManifest = [
+        {
+          name = "complete-nxp-flash-all-container";
+          kind = "licensed-binary";
+          sha256 = expectedSha256;
+        }
+      ];
+      containsM7Application = true;
+      providerKind = "nxp-complete-container";
+      providerLicense = nxpLicense;
+      release = version;
       reservedBootRegionMiB = 8;
+      ubootEnvironmentOffsetKiB = 7 * 1024;
+      ubootEnvironmentSizeBytes = 16 * 1024;
     };
 
     meta = {

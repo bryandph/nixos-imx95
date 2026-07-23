@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$#" -ne 3 ]]; then
+  echo "usage: check-nxp-firmware-file PATH SHA256 SIZE" >&2
+  exit 2
+fi
+
+path="$1"
+expected_hash="$2"
+expected_size="$3"
+
+if [[ ! -f "$path" ]]; then
+  echo "required licensed firmware is missing: $path" >&2
+  exit 1
+fi
+
+actual_size="$(stat -c %s "$path")"
+if [[ "$actual_size" -ne "$expected_size" ]]; then
+  echo "licensed firmware size mismatch for $path: $actual_size, expected $expected_size" >&2
+  exit 1
+fi
+
+if ! printf '%s  %s\n' "$expected_hash" "$path" | sha256sum --check --status; then
+  echo "licensed firmware identity mismatch: $path" >&2
+  exit 1
+fi

@@ -1,0 +1,254 @@
+{lib}: {
+  release = {
+    version = "6.18.20-2.0.0";
+    metaImx = {
+      repository = "https://github.com/nxp-imx/meta-imx";
+      branch = "wrynose-6.18.20-2.0.0";
+      rev = "5bde00498b041167629890563478eb89c7ca10b8";
+      machineFile = "meta-imx-bsp/conf/machine/imx95-15x15-lpddr4x-frdm.conf";
+    };
+    metaFreescale = {
+      repository = "https://github.com/Freescale/meta-freescale";
+      branch = "wrynose";
+      rev = "381158b2010cb9c450c24ac2dc72afcb1536d54e";
+      machineInclude = "conf/machine/include/imx95-evk.inc";
+    };
+  };
+
+  machine = {
+    name = "imx95-15x15-lpddr4x-frdm";
+    soc = "iMX95";
+    socRevision = "B0";
+    ubootDefconfig = "imx95_15x15_frdm_defconfig";
+    ubootDtb = "imx95-15x15-frdm.dtb";
+    atfPlatform = "imx95";
+    opteePlatform = "imx-mx95evk";
+    opteePlatformFlavor = "mx95evk";
+    systemManagerConfig = "mx95evk";
+    systemManagerMonitorMode = "2";
+    systemManagerImage = "m33_image.bin";
+    oeiCore = "m33";
+    oeiSoc = "mx95";
+    oeiBoard = "mx95lp4x-15";
+    oeiConfig = "ddr";
+    oeiDdrConfig = "MIMX95_LPDDR4X_EVK_15X15_4000MTS_FW2024.09_timing";
+    ddrType = "lpddr4x";
+    imxMkimageTarget = "flash_a55";
+    imxMkimageSoc = "iMX95";
+    imxMkimageRevision = "B0";
+    bootContainerFileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55";
+    bootContainerExpectedHash = "sha256-JvFomROH5DK76vOeBZRvyCkLiaru/tobGBM2svzQ6Ys=";
+    bootContainerExpectedSha256 = "26f168991387e432bbeaf39e05946fc8290b89aaeefeda1b181336b2fcd0e98b";
+    bootContainerExpectedSize = 2997248;
+    bootContainerOffsetKiB = 32;
+    reservedBootRegionMiB = 8;
+  };
+
+  toolchains = {
+    aarch64 = {
+      nixpkgsPackage = "pkgsCross.aarch64-multiplatform";
+      targetPrefix = "aarch64-unknown-linux-gnu-";
+    };
+    armBareMetal = {
+      nixpkgsPackage = "gcc-arm-embedded";
+      version = "15.2.rel1";
+      targetPrefix = "arm-none-eabi-";
+      rationale = ''
+        NXP's System Manager and OEI release sources require Arm GNU
+        Toolchain 15.2.Rel1 as a matched compiler/binutils distribution.
+        Nixpkgs' independently composed pkgsCross.arm-embedded toolchain
+        links these images incorrectly, so use Nixpkgs' narrowly scoped,
+        release-matched gcc-arm-embedded package for these two components.
+      '';
+    };
+  };
+
+  sources = {
+    uboot = {
+      pname = "uboot-imx95-frdm";
+      version = "2026.04-lf-6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "uboot-imx";
+        rev = "6eeef838dac4ddbc06ff14450531a95e8c5cb346";
+        sha256 = "1vjhk4dd1wnfapc3133k3f8r2z64bg4z609pgrw9bkdcabr6bq8k";
+      };
+      branch = "lf_v2026.04";
+      license = lib.licenses.gpl2Plus;
+      licenseFile = "Licenses/gpl-2.0.txt";
+      build = {
+        target = "all";
+        flags = [
+          "CROSS_COMPILE=aarch64-unknown-linux-gnu-"
+          "DTC=dtc"
+        ];
+      };
+    };
+
+    armTrustedFirmware = {
+      pname = "imx-atf-imx95";
+      version = "2.14-lf-6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "imx-atf";
+        rev = "0779f89a5475a03193f7707f3bbb50cec11707c0";
+        sha256 = "1yi0kkx9kr2qs7xd3bkcbpv8pizlbigprcing96i36fvri7ch9yx";
+      };
+      branch = "lf_v2.14";
+      license = lib.licenses.bsd3;
+      licenseFile = "license.rst";
+      build = {
+        target = "bl31";
+        flags = [
+          "PLAT=imx95"
+          "SPD=opteed"
+        ];
+      };
+    };
+
+    optee = {
+      pname = "imx-optee-os-imx95";
+      version = "4.10.0-lf-6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "imx-optee-os";
+        rev = "37c7fbf84c40eb9e5828532972ffb133b4917390";
+        sha256 = "0gdf0sldvzrzrh7hijy9wr4jr5f98982wg4vxwjnjn75kanfwxid";
+      };
+      branch = "lf-6.18.20_2.0.0";
+      license = lib.licenses.bsd2;
+      licenseFile = "LICENSE";
+      build = {
+        target = "all";
+        flags = [
+          "PLATFORM=imx"
+          "PLATFORM_FLAVOR=mx95evk"
+          "CFG_TEE_TA_LOG_LEVEL=0"
+          "CFG_TEE_CORE_LOG_LEVEL=0"
+        ];
+      };
+    };
+
+    systemManager = {
+      pname = "imx-system-manager-imx95";
+      version = "2026q2-lf-6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "imx-sm";
+        rev = "44f76dcb32945a60e08ea0133700b820349efbd3";
+        sha256 = "0lrlxpq3zxv726bldabgs9ypwvfjp68cvmdas3i5w5s3yq82216w";
+      };
+      branch = "master";
+      license = lib.licenses.bsd3;
+      licenseFile = "LICENSE.txt";
+      build = {
+        target = "all";
+        flags = [
+          "CONFIG=mx95evk"
+          "M=2"
+          "SM_CROSS_COMPILE=arm-none-eabi-"
+        ];
+      };
+    };
+
+    oei = {
+      pname = "imx-oei-imx95-frdm";
+      version = "1.0.0-lf-6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "imx-oei";
+        rev = "e9bce6f4f69dceaf3664b7e28eb4302004ee0361";
+        sha256 = "16b3aj62h2brlgkybhndd35bdsppd7xymm8yxbmx942ixizrq161";
+      };
+      branch = "master";
+      license = lib.licenses.bsd3;
+      licenseFile = "LICENSE.txt";
+      build = {
+        target = "all";
+        flags = [
+          "oei=ddr"
+          "board=mx95lp4x-15"
+          "DDR_CONFIG=MIMX95_LPDDR4X_EVK_15X15_4000MTS_FW2024.09_timing"
+          "DEBUG=1"
+          "OEI_CROSS_COMPILE=arm-none-eabi-"
+          "r=B0"
+        ];
+      };
+    };
+
+    imxMkimage = {
+      pname = "imx-mkimage-imx95";
+      version = "6.18.20-2.0.0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "imx-mkimage";
+        rev = "1b577853ae1afe1f26cdef27548da52fb424af48";
+        sha256 = "12rpr2q99fcc7127rpr3j492bj8ddh7566yi24112jgzaj7xd17d";
+      };
+      branch = "lf-6.18.20_2.0.0";
+      license = lib.licenses.gpl2Only;
+      licenseFile = "LICENSE";
+      build = {
+        target = "flash_a55";
+        flags = [
+          "SOC=iMX95"
+          "REV=B0"
+          "TEE=tee.bin"
+          "OEI=YES"
+          "LPDDR_TYPE=lpddr4x"
+          "dtbs=imx95-15x15-frdm.dtb"
+        ];
+      };
+    };
+  };
+
+  licensedFirmware = {
+    license = {
+      fullName = "NXP Software License Agreement";
+      redistributable = false;
+    };
+
+    ele = {
+      distribution = {
+        fileName = "firmware-ele-imx-2.0.6-c0b284c.bin";
+        sha256 = "ff42b838c42448616d3f6dc5a7f0d47c207bb0bae1ae00bea091103ed4012c28";
+      };
+      members = [
+        {
+          fileName = "mx95b0-ahab-container.img";
+          sha256 = "43baad07d08789e91a6d956f5071257fb4680be5fbcfeca2af0a33ff5009f53c";
+          size = 175488;
+        }
+      ];
+    };
+
+    ddr = {
+      distribution = {
+        fileName = "firmware-imx-8.32-1991416.bin";
+        sha256 = "11396e5798b62cd61963db806c0c05500887bc62a98e1d16dbc3014aa0c21a2a";
+      };
+      members = [
+        {
+          fileName = "lpddr4x_dmem_v202409.bin";
+          sha256 = "1e770d3f0f0d9fd7a4be7d8a9ba69db60a1239088f3f2ea38c1944564cb89d6b";
+          size = 65536;
+        }
+        {
+          fileName = "lpddr4x_dmem_qb_v202409.bin";
+          sha256 = "b9344aa7a64c7df6a537315dbbafc4dc4b84bb0a73fea7a798c059d7c1d236ac";
+          size = 65536;
+        }
+        {
+          fileName = "lpddr4x_imem_v202409.bin";
+          sha256 = "8625bd4bdfaccdf773469a7f81d8ae270e7a7ec4a451cbf4b90f8bbc4dc2398a";
+          size = 51860;
+        }
+        {
+          fileName = "lpddr4x_imem_qb_v202409.bin";
+          sha256 = "93946e2ed414889c0ab47899c201833bc1807cb367e5e3130a11c0bc1f58edb5";
+          size = 25224;
+        }
+      ];
+    };
+  };
+}

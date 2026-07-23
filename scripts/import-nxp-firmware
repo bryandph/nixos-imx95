@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ele_distribution_name="firmware-ele-imx-2.0.6-c0b284c.bin"
+ele_distribution_sha256="ff42b838c42448616d3f6dc5a7f0d47c207bb0bae1ae00bea091103ed4012c28"
+ddr_distribution_name="firmware-imx-8.32-1991416.bin"
+ddr_distribution_sha256="11396e5798b62cd61963db806c0c05500887bc62a98e1d16dbc3014aa0c21a2a"
+
+usage() {
+  echo "usage: $0 --accept-license /path/to/$ele_distribution_name /path/to/$ddr_distribution_name" >&2
+}
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+absolute_path() {
+  local input_path=$1
+  local input_dir
+  local input_name
+  input_dir=$(dirname "$input_path")
+  input_name=$(basename "$input_path")
+  echo "$(cd "$input_dir" && pwd)/$input_name"
+}
+
+verify_file() {
+  local path=$1
+  local expected_hash=$2
+  local label=$3
+  local actual_hash
+
+  if [ ! -f "$path" ]; then
+    echo "$label not found: $path" >&2
+    exit 1
+  fi
+
+  actual_hash=$(hash_file "$path")
+  if [ "$actual_hash" != "$expected_hash" ]; then
+    echo "$label hash mismatch" >&2
+    echo "expected: $expected_hash" >&2
+    echo "actual:   $actual_hash" >&2
+    exit 1
+  fi
+}
+
+import_member() {
+  local path=$1
+  local expected_hash=$2
+  local expected_size=$3
+  local file_name=$4
+  local actual_size
+  local store_path
+
+  verify_file "$path" "$expected_hash" "$file_name"
+  actual_size=$(wc -c <"$path" | tr -d ' ')
+  if [ "$actual_size" != "$expected_size" ]; then
+    echo "$file_name size mismatch" >&2
+    echo "expected: $expected_size" >&2
+    echo "actual:   $actual_size" >&2
+    exit 1
+  fi
+
+  store_path=$(nix-store --add-fixed sha256 "$path")
+  echo "Imported $file_name as $store_path"
+}
+
+if [ "$#" -ne 3 ] || [ "$1" != "--accept-license" ]; then
+  usage
+  exit 2
+fi
+
+for command_name in awk nix-store sh; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "required command not found: $command_name" >&2
+    exit 1
+  fi
+done
+
+ele_distribution=$(absolute_path "$2")
+ddr_distribution=$(absolute_path "$3")
+
+verify_file "$ele_distribution" "$ele_distribution_sha256" "$ele_distribution_name"
+verify_file "$ddr_distribution" "$ddr_distribution_sha256" "$ddr_distribution_name"
+
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/nixos-imx95-firmware.XXXXXX")
+trap 'rm -rf -- "$tmp_dir"' EXIT
+
+(
+  cd "$tmp_dir"
+  sh "$ele_distribution" --auto-accept --force
+  sh "$ddr_distribution" --auto-accept --force
+)
+
+ele_root="$tmp_dir/firmware-ele-imx-2.0.6-c0b284c"
+ddr_root="$tmp_dir/firmware-imx-8.32-1991416/firmware/ddr/synopsys"
+
+import_member \
+  "$ele_root/mx95b0-ahab-container.img" \
+  "43baad07d08789e91a6d956f5071257fb4680be5fbcfeca2af0a33ff5009f53c" \
+  "175488" \
+  "mx95b0-ahab-container.img"
+import_member \
+  "$ddr_root/lpddr4x_dmem_v202409.bin" \
+  "1e770d3f0f0d9fd7a4be7d8a9ba69db60a1239088f3f2ea38c1944564cb89d6b" \
+  "65536" \
+  "lpddr4x_dmem_v202409.bin"
+import_member \
+  "$ddr_root/lpddr4x_dmem_qb_v202409.bin" \
+  "b9344aa7a64c7df6a537315dbbafc4dc4b84bb0a73fea7a798c059d7c1d236ac" \
+  "65536" \
+  "lpddr4x_dmem_qb_v202409.bin"
+import_member \
+  "$ddr_root/lpddr4x_imem_v202409.bin" \
+  "8625bd4bdfaccdf773469a7f81d8ae270e7a7ec4a451cbf4b90f8bbc4dc2398a" \
+  "51860" \
+  "lpddr4x_imem_v202409.bin"
+import_member \
+  "$ddr_root/lpddr4x_imem_qb_v202409.bin" \
+  "93946e2ed414889c0ab47899c201833bc1807cb367e5e3130a11c0bc1f58edb5" \
+  "25224" \
+  "lpddr4x_imem_qb_v202409.bin"
+
+echo
+echo "Only the five required firmware members were added to the local Nix store."
+echo "Do not publish these store paths or upload dependent outputs to a public cache."

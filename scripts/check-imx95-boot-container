@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$#" -ne 6 ]]; then
+  echo "usage: check-imx95-boot-container PATH SHA256 SIZE OFFSET_BYTES RESERVED_BYTES ENVIRONMENT_OFFSET_BYTES" >&2
+  exit 2
+fi
+
+path="$1"
+expected_hash="$2"
+expected_size="$3"
+offset_bytes="$4"
+reserved_bytes="$5"
+environment_offset_bytes="$6"
+
+if [[ ! -f "$path" ]]; then
+  echo "boot-container provider did not emit $path" >&2
+  exit 1
+fi
+
+actual_size="$(stat -c %s "$path")"
+actual_hash="$(sha256sum "$path" | cut -d' ' -f1)"
+
+if [[ "$actual_hash" != "$expected_hash" ]]; then
+  echo "boot-container identity mismatch" >&2
+  echo "expected: $expected_hash" >&2
+  echo "actual:   $actual_hash" >&2
+  exit 1
+fi
+
+if [[ "$actual_size" -ne "$expected_size" ]]; then
+  echo "boot container has size $actual_size; expected $expected_size" >&2
+  exit 1
+fi
+
+container_end=$((offset_bytes + actual_size))
+if [[ "$container_end" -gt "$reserved_bytes" ]]; then
+  echo "boot container overlaps the first partition" >&2
+  exit 1
+fi
+
+if [[ "$container_end" -gt "$environment_offset_bytes" ]]; then
+  echo "boot container overlaps the U-Boot environment" >&2
+  exit 1
+fi

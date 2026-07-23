@@ -3,59 +3,94 @@
 Reusable NixOS support for NXP i.MX 95 boards. The first supported target is
 the NXP FRDM-i.MX95.
 
-The initial implementation deliberately keeps NXP's AHAB firmware container
-and downstream U-Boot while booting a mainline NixOS kernel and the upstream
-`freescale/imx95-15x15-frdm.dtb` through extlinux. It produces a raw image for
-SD-first acceptance and guarded installation to eMMC. Builds never modify a
+The flake builds U-Boot, TF-A, OP-TEE, System Manager, OEI, and imx-mkimage
+from release-pinned source. Only NXP's ELE firmware and four Synopsys
+LPDDR4X training binaries remain operator-supplied. Those components are
+assembled with imx-mkimage's `flash_a55` target, which retains the M33
+System Manager but omits NXP's unrelated prebuilt M7 demonstration.
+
+The source-built provider is available for SD acceptance alongside the
+previous complete-container compatibility provider. The compatibility
+provider remains the module default until source-built SD and eMMC hardware
+acceptance succeeds. Both paths boot a mainline NixOS kernel and the upstream
+`freescale/imx95-15x15-frdm.dtb` through extlinux. Builds never modify a
 device.
 
 ## License boundary
 
-This repository is public, but the required NXP boot container is not.
+This repository is public, but the required NXP firmware and every aggregate
+output embedding it are not redistributable.
 
 The repository's MIT license applies only to the original source code here.
-The NXP BSP archive and the extracted boot container remain governed by the
-license accepted on NXP's download page. The LF6.18.20 Software Content
-Register grants its distribution rights only under the conditions in Section
-2.3 of NXP's license, including distribution as part of an authorized
-NXP-based system rather than as a standalone artifact.
+The ELE and DDR firmware distributions, their extracted members, the
+source-assembled container, the complete compatibility container, and both
+generated images remain governed by NXP's license. The LF6.18.20 Software
+Content Register grants distribution rights only under the conditions in
+Section 2.3 of that license, including distribution as part of an authorized
+NXP-based system rather than as standalone artifacts.
 
 Accordingly:
 
-- the NXP ZIP and extracted boot container are never committed;
-- the artifact is represented as `lib.licenses.unfree` with
+- NXP distributions and extracted firmware are never committed;
+- each of the five required firmware members has a separate hash-pinned
+  `requireFile` package;
+- open-source intermediate packages retain their actual upstream licenses;
+- firmware and aggregate outputs use `lib.licenses.unfree` with
   `redistributable = false`;
-- `requireFile` makes every operator obtain and accept the licensed download;
-- Hydra is disabled and substitutes are disabled for the artifact and image;
-- the artifact, its store path, and generated image must not be uploaded to a
-  public binary cache or attached to a GitHub release.
+- import requires an explicit `--accept-license` acknowledgement;
+- Hydra and substitutes are disabled for firmware-bearing containers, checks,
+  and images; and
+- firmware, dependent store paths, containers, and generated images must not
+  be uploaded to a public cache or attached to a GitHub release.
 
 This is a conservative engineering policy, not legal advice.
 
-## Import the licensed boot container
+## Import the granular licensed firmware
 
-1. Sign in to NXP, accept the license, and download
-   `L6.18.20-2.0.0_MX95` from the
-   [official download page](https://www.nxp.com/webapp/Download?colCode=L6.18.20-2.0.0_MX95&appType=license).
-2. Import exactly the FRDM boot-container member:
+Obtain these release-pinned NXP self-extracting distributions after reviewing
+and accepting their licenses:
 
-   ```console
-   ./scripts/import-nxp-boot-container \
-     ~/Downloads/LF_v6.18.20-2.0.0_images_IMX95EVK.zip
-   ```
+- `firmware-ele-imx-2.0.6-c0b284c.bin`
+- `firmware-imx-8.32-1991416.bin`
 
-The helper verifies the complete source archive, extracts only
-`imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all`, verifies its size and
-hash, and adds only that 3 MB file to the local Nix store. It does not copy
-either artifact into the checkout.
+The official URLs and distribution/member hashes live in
+`packages/imx95-lf-6.18.20-2.0.0.nix`. Import exactly the required members:
+
+```console
+./scripts/import-nxp-firmware --accept-license \
+  ~/Downloads/firmware-ele-imx-2.0.6-c0b284c.bin \
+  ~/Downloads/firmware-imx-8.32-1991416.bin
+```
+
+The helper verifies both distributions, invokes their licensed extraction
+flow, extracts only the B0 ELE image and four FRDM LPDDR4X members, verifies
+every size and hash, and adds only those five files to the local Nix store.
+Temporary extraction is removed on exit. Nothing is copied into the checkout.
+
+For compatibility rollback, the older complete NXP container can still be
+imported independently:
+
+```console
+./scripts/import-nxp-boot-container \
+  ~/Downloads/LF_v6.18.20-2.0.0_images_IMX95EVK.zip
+```
 
 ## Build
 
 ```console
 nix run --impure .#fmt
 nix flake check --impure -j 1
-nix build --impure -j 1 .#packages.aarch64-linux.frdm-imx95-sd-image
+nix build --impure -j 1 \
+  .#packages.aarch64-linux.frdm-imx95-source-boot-container
+nix build --impure -j 1 \
+  .#packages.aarch64-linux.frdm-imx95-source-built-sd-image
 ```
+
+`frdm-imx95-sd-image` remains the compatibility-provider image during
+hardware acceptance. `frdm-imx95-source-built-sd-image` is the candidate
+image. The checks parse its AHAB inventory, reject missing/corrupt/unsafe
+inputs, compare two clean assemblies byte-for-byte, and verify its exact bytes
+at the raw SD offset.
 
 NixOS consumers should build
 `config.system.build.frdmImx95SdImage`, not the standard module's raw
@@ -74,8 +109,10 @@ extlinux entry on the real boot filesystem. The ext4 root uses the stable
 major/minor identity through sysfs rather than assuming a device-node minor
 number.
 
-No flashing app is provided. The manual eMMC procedure below requires an
-independently verified target.
+No flashing app is provided. Preserve an accepted compatibility-provider SD
+card while testing the source-built image. The manual eMMC procedure below
+requires an independently verified target and must not be used for the
+source-built provider until SD cold-boot and reboot acceptance pass.
 
 ## Install an accepted image to eMMC
 
@@ -188,6 +225,9 @@ NXP artifacts may be published.
 
 ```nix
 {
+  hardware.nxp.imx95.bootContainer =
+    inputs.nixos-imx95.packages.${pkgs.system}.frdm-imx95-source-boot-container;
+
   imports = [
     inputs.nixos-imx95.nixosModules.frdm-imx95-core
     inputs.nixos-imx95.nixosModules.frdm-imx95-sd-image
@@ -195,9 +235,21 @@ NXP artifacts may be published.
 
   nixpkgs.config.allowUnfreePredicate = pkg:
     builtins.elem (lib.getName pkg) [
+      "frdm-imx95-source-boot-container"
       "imx-boot-imx95"
+      "lpddr4x_dmem_qb_v202409.bin"
+      "lpddr4x_dmem_v202409.bin"
+      "lpddr4x_imem_qb_v202409.bin"
+      "lpddr4x_imem_v202409.bin"
+      "mx95b0-ahab-container.img"
       "nxp-imx95-boot-container"
+      "nxp-imx95-ele-firmware"
+      "nxp-imx95-lpddr4x-dmem"
+      "nxp-imx95-lpddr4x-dmem-qb"
+      "nxp-imx95-lpddr4x-imem"
+      "nxp-imx95-lpddr4x-imem-qb"
       "nixos-frdm-imx95.img.zst"
+      "nixos-frdm-imx95-source-built.img.zst"
     ];
 }
 ```
@@ -205,12 +257,17 @@ NXP artifacts may be published.
 The core module selects a mainline kernel with upstream FRDM support, uses the
 exact upstream DTB, enables extlinux, and configures the A55 console on
 `ttyLP0`. The SD-image module owns only the licensed boot-container boundary
-and deterministic image layout.
+and deterministic image layout. Omit the explicit `bootContainer` assignment
+to select the complete-container compatibility provider.
 
 ## Source pointers
 
 - NXP U-Boot FRDM configuration:
-  [`imx95_15x15_frdm_defconfig`](https://github.com/nxp-imx/uboot-imx/blob/lf_v2025.04/configs/imx95_15x15_frdm_defconfig)
+  [`imx95_15x15_frdm_defconfig`](https://github.com/nxp-imx/uboot-imx/blob/6eeef838dac4ddbc06ff14450531a95e8c5cb346/configs/imx95_15x15_frdm_defconfig)
+- Authoritative LF6.18.20 FRDM machine mapping:
+  [`imx95-15x15-lpddr4x-frdm.conf`](https://github.com/nxp-imx/meta-imx/blob/5bde00498b041167629890563478eb89c7ca10b8/meta-imx-bsp/conf/machine/imx95-15x15-lpddr4x-frdm.conf)
+- Local immutable release mapping:
+  [`packages/imx95-lf-6.18.20-2.0.0.nix`](packages/imx95-lf-6.18.20-2.0.0.nix)
 - Release WIC layout:
   [`imx-imx-boot-bootpart.wks.in`](https://github.com/Freescale/meta-freescale/blob/2781242e499e601ef9454009aceed16186a48d9e/wic/imx-imx-boot-bootpart.wks.in)
 - Board guide:
