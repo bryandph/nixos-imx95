@@ -43,29 +43,7 @@
         board = config.flake.nixosConfigurations.frdm-imx95;
         bootContainer = board.config.hardware.nxp.imx95.bootContainer;
         bootContainerName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all";
-        unfreeLicense =
-          lib.licenses.unfree
-          // {
-            fullName = "NXP Software License Agreement (LA_OPT_NXP_Software_License v63, May 2025)";
-            redistributable = false;
-          };
-        sdImage = board.config.system.build.sdImage.overrideAttrs (old: {
-          allowSubstitutes = false;
-          preferLocalBuild = true;
-          meta =
-            (old.meta or {})
-            // {
-              description = "NixOS SD image for FRDM-i.MX95 containing licensed NXP firmware";
-              license = unfreeLicense;
-              hydraPlatforms = [];
-              platforms = ["aarch64-linux"];
-              sourceProvenance = with lib.sourceTypes; [
-                fromSource
-                binaryFirmware
-                binaryNativeCode
-              ];
-            };
-        });
+        sdImage = board.config.system.build.frdmImx95SdImage;
         bootContainerOffsetBytes = board.config.hardware.nxp.imx95.bootContainerOffsetKiB * 1024;
         firmwareOffsetBytes = board.config.sdImage.firmwarePartitionOffset * 1024 * 1024;
         rootOffsetBytes =
@@ -88,6 +66,16 @@
               /dev/disk/by-label/NIXOS_SD
             test ${lib.escapeShellArg board.config.fileSystems."/boot/firmware".device} = \
               /dev/disk/by-label/BOOT
+            test ${
+              if sdImage.allowSubstitutes
+              then "1"
+              else "0"
+            } = 0
+            test ${
+              if sdImage.meta.license.redistributable
+              then "1"
+              else "0"
+            } = 0
             touch "$out"
           '';
 

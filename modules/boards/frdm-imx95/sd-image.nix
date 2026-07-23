@@ -12,6 +12,12 @@
       if cfg.bootContainer == null
       then "/dev/null"
       else "${cfg.bootContainer}/${bootContainerName}";
+    unfreeLicense =
+      lib.licenses.unfree
+      // {
+        fullName = "NXP Software License Agreement (LA_OPT_NXP_Software_License v63, May 2025)";
+        redistributable = false;
+      };
     offsetBytes = cfg.bootContainerOffsetKiB * 1024;
     reservedBytes = cfg.reservedBootRegionMiB * 1024 * 1024;
   in {
@@ -108,6 +114,24 @@
             seek=${toString cfg.bootContainerOffsetKiB} conv=notrunc,fsync status=none
         '';
       };
+
+      system.build.frdmImx95SdImage = config.system.build.sdImage.overrideAttrs (old: {
+        allowSubstitutes = false;
+        preferLocalBuild = true;
+        meta =
+          (old.meta or {})
+          // {
+            description = "NixOS SD image for FRDM-i.MX95 containing licensed NXP firmware";
+            license = unfreeLicense;
+            hydraPlatforms = [];
+            platforms = ["aarch64-linux"];
+            sourceProvenance = with lib.sourceTypes; [
+              fromSource
+              binaryFirmware
+              binaryNativeCode
+            ];
+          };
+      });
     };
   };
 }

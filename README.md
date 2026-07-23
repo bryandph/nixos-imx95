@@ -56,6 +56,12 @@ nix flake check --impure -j 1
 nix build --impure -j 1 .#packages.aarch64-linux.frdm-imx95-sd-image
 ```
 
+NixOS consumers should build
+`config.system.build.frdmImx95SdImage`, not the standard module's raw
+`config.system.build.sdImage`; the FRDM-specific output carries the unfree,
+non-redistributable, no-substitutes metadata required by the embedded NXP
+artifact.
+
 The image reserves the first 8 MiB, installs the NXP boot container at the
 vendor-defined 32 KiB offset, creates a 512 MiB FAT `BOOT` partition containing
 generation-aware extlinux entries, and uses an ext4 `NIXOS_SD` root by stable
