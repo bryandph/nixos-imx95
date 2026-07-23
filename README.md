@@ -69,8 +69,8 @@ before writing the resulting image.
 ```nix
 {
   imports = [
-    inputs.nixos-imx95.nixosModules.boards.frdm-imx95.core
-    inputs.nixos-imx95.nixosModules.boards.frdm-imx95.sd-image
+    inputs.nixos-imx95.nixosModules.frdm-imx95-core
+    inputs.nixos-imx95.nixosModules.frdm-imx95-sd-image
   ];
 
   nixpkgs.config.allowUnfreePredicate = pkg:
