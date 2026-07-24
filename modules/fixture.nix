@@ -161,6 +161,9 @@ in {
           rustPlatform = firmwareRustPlatform;
         };
         sourceBootContainer = pkgs.callPackage ../packages/imx95-source-boot-container.nix {};
+        m7SourceBootContainer = pkgs.callPackage ../packages/imx95-source-boot-container.nix {
+          remoteprocMode = true;
+        };
         sourceBootContainerReproA = pkgs.callPackage ../packages/imx95-source-boot-container.nix {
           buildInstance = "repro-a";
         };
@@ -218,6 +221,7 @@ in {
           frdm-imx95-m7-remoteproc-sd-image =
             m7Board.config.system.build.frdmImx95SdImage;
           frdm-imx95-m7-smoke = m7SmokeFirmware;
+          frdm-imx95-m7-source-boot-container = m7SourceBootContainer;
           frdm-imx95-source-boot-container = sourceBootContainer;
           frdm-imx95-source-built-sd-image = sourceSdImage;
           frdm-imx95-compatibility-sd-image = compatibilitySdImage;
@@ -373,6 +377,25 @@ in {
               then "1"
               else "0"
             } = 0
+            touch "$out"
+          '';
+
+          m7-boot-container-evaluation = pkgs.runCommand "frdm-imx95-m7-boot-container-evaluation" {} ''
+            test ${lib.escapeShellArg m7SourceBootContainer.providerKind} = \
+              source-assembled
+            test ${lib.escapeShellArg m7SourceBootContainer.systemManagerConfig} = \
+              other/mx95evkrpmsg
+            test ${lib.escapeShellArg m7SourceBootContainer.fileName} = \
+              imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55-m7-remoteproc
+            test ${
+              if m7SourceBootContainer.containsM7Application
+              then "0"
+              else "1"
+            } = 1
+            test ${lib.escapeShellArg m7Board.config.hardware.nxp.imx95.bootContainer.systemManagerConfig} = \
+              other/mx95evkrpmsg
+            test ${lib.escapeShellArg board.config.hardware.nxp.imx95.bootContainer.systemManagerConfig} = \
+              mx95evk
             touch "$out"
           '';
 
@@ -583,6 +606,36 @@ in {
               test "$(grep -c 'A core Image' inventory.txt)" -eq 3
               if grep -Eq 'M7|CORE_CM7' inventory.txt; then
                 echo "unexpected M7 application payload in source-built container" >&2
+                exit 1
+              fi
+
+              touch "$out"
+            '';
+
+          m7-source-container-structure =
+            pkgs.runCommand "frdm-imx95-m7-source-container-structure" {
+              allowSubstitutes = false;
+              preferLocalBuild = true;
+              meta = {
+                license = m7SourceBootContainer.providerLicense;
+                hydraPlatforms = [];
+              };
+            } ''
+              ${imxMkimage}/bin/mkimage_imx8 \
+                -soc IMX9 \
+                -parse \
+                "${m7SourceBootContainer}/${m7SourceBootContainer.fileName}" \
+                > inventory.txt
+
+              grep -q 'IMAGE 1 (ELE FW)' inventory.txt
+              grep -q 'IMAGE 2 (DDR Init)' inventory.txt
+              grep -q 'IMAGE 3 (M33)' inventory.txt
+              grep -q 'CORE_CM33' inventory.txt
+              grep -q 'IMAGE 4 (Bootloader)' inventory.txt
+              grep -q 'CORE_CA55' inventory.txt
+              test "$(grep -c 'A core Image' inventory.txt)" -eq 3
+              if grep -Eq 'M7|CORE_CM7' inventory.txt; then
+                echo "unexpected M7 application payload in remoteproc boot container" >&2
                 exit 1
               fi
 

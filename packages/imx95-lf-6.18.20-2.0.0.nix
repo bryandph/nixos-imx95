@@ -106,6 +106,12 @@
         rpmsgDtsPath = "arch/arm64/boot/dts/freescale/imx95-15x15-frdm-rpmsg.dts";
       };
       compatible = "fsl,imx95-cm7";
+      bootContainer = {
+        systemManagerConfig = "other/mx95evkrpmsg";
+        expectedSha256 = "f0ee5f7260389d356e29db2d10f20ddf1d3ca0d55997b99babec2e6a969d4a59";
+        expectedSize = 2995200;
+        fileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55-m7-remoteproc";
+      };
       firmwareFormat = "elf32-littlearm";
       vendorDemoFormat = "raw-binary";
       tcm = {

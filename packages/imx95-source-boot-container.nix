@@ -8,13 +8,23 @@
   gnumake,
   gnused,
   lib,
+  remoteprocMode ? false,
   runCommand,
   xxd,
 }: let
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
+  bootContainerConfig =
+    if remoteprocMode
+    then release.m7.remoteproc.bootContainer
+    else {
+      systemManagerConfig = release.machine.systemManagerConfig;
+      expectedSha256 = release.machine.bootContainerExpectedSha256;
+      expectedSize = release.machine.bootContainerExpectedSize;
+      fileName = release.machine.bootContainerFileName;
+    };
   bootContainerExpectedSha256 =
     if expectedBootContainerSha256 == null
-    then release.machine.bootContainerExpectedSha256
+    then bootContainerConfig.expectedSha256
     else expectedBootContainerSha256;
   bootContainerExpectedHash = builtins.convertHash {
     hash = bootContainerExpectedSha256;
@@ -24,7 +34,9 @@
   uboot = callPackage ./uboot-imx95-frdm.nix {};
   armTrustedFirmware = callPackage ./imx-atf-imx95.nix {};
   optee = callPackage ./imx-optee-os-imx95.nix {};
-  systemManager = callPackage ./imx-system-manager-imx95.nix {};
+  systemManager = callPackage ./imx-system-manager-imx95.nix {
+    systemManagerConfig = bootContainerConfig.systemManagerConfig;
+  };
   oei = callPackage ./imx-oei-imx95-frdm.nix {};
   imxMkimage = callPackage ./imx-mkimage-imx95.nix {};
   licensedFirmware = callPackage ./imx95-licensed-firmware.nix {};
@@ -39,6 +51,7 @@
   firmwareValidator = ../scripts/check-nxp-firmware-file;
   derivationName =
     "frdm-imx95-source-boot-container-${release.release.version}"
+    + lib.optionalString remoteprocMode "-m7-remoteproc"
     + lib.optionalString (buildInstance != null) "-${buildInstance}";
 
   nxpLicense =
@@ -89,8 +102,9 @@ in
       containsM7Application = false;
       expectedHash = bootContainerExpectedHash;
       expectedSha256 = bootContainerExpectedSha256;
-      expectedSize = release.machine.bootContainerExpectedSize;
-      fileName = release.machine.bootContainerFileName;
+      expectedSize = bootContainerConfig.expectedSize;
+      fileName = bootContainerConfig.fileName;
+      systemManagerConfig = bootContainerConfig.systemManagerConfig;
       providerKind = "source-assembled";
       providerLicense = nxpLicense;
       release = release.release.version;
@@ -189,8 +203,8 @@ in
     fi
 
     actual_size=$(stat -c %s work/iMX95/flash.bin)
-    if [ "$actual_size" -ne ${toString release.machine.bootContainerExpectedSize} ]; then
-      echo "assembled boot container has size $actual_size; expected ${toString release.machine.bootContainerExpectedSize}" >&2
+    if [ "$actual_size" -ne ${toString bootContainerConfig.expectedSize} ]; then
+      echo "assembled boot container has size $actual_size; expected ${toString bootContainerConfig.expectedSize}" >&2
       exit 1
     fi
 
@@ -204,5 +218,5 @@ in
 
     install -Dm0444 \
       work/iMX95/flash.bin \
-      "$out/${release.machine.bootContainerFileName}"
+      "$out/${bootContainerConfig.fileName}"
   ''

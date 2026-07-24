@@ -6,9 +6,12 @@
     ...
   }: let
     system = pkgs.stdenv.hostPlatform.system;
+    m7BootContainer = inputs.self.packages.${system}.frdm-imx95-m7-source-boot-container;
     m7Ctl = inputs.self.packages.${system}.frdm-imx95-m7-ctl;
     m7SmokeFirmware = inputs.self.packages.${system}.frdm-imx95-m7-smoke;
   in {
+    hardware.nxp.imx95.bootContainer = lib.mkOverride 900 m7BootContainer;
+
     hardware.deviceTree.overlays = [
       {
         name = "frdm-imx95-m7-remoteproc";

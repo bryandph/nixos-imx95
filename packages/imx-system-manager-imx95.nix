@@ -4,9 +4,14 @@
   lib,
   perl,
   stdenvNoCC,
+  systemManagerConfig ? null,
 }: let
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
   component = release.sources.systemManager;
+  resolvedSystemManagerConfig =
+    if systemManagerConfig == null
+    then release.machine.systemManagerConfig
+    else systemManagerConfig;
   armToolchain = gcc-arm-embedded;
   crossPrefix = release.toolchains.armBareMetal.targetPrefix;
 in
@@ -33,17 +38,17 @@ in
       runHook preBuild
 
       make \
-        CONFIG=${release.machine.systemManagerConfig} \
+        CONFIG=${resolvedSystemManagerConfig} \
         M=${release.machine.systemManagerMonitorMode} \
         SM_CROSS_COMPILE=${crossPrefix} \
         clean
       make \
-        CONFIG=${release.machine.systemManagerConfig} \
+        CONFIG=${resolvedSystemManagerConfig} \
         M=${release.machine.systemManagerMonitorMode} \
         SM_CROSS_COMPILE=${crossPrefix} \
         cfg
       make -j"$NIX_BUILD_CORES" \
-        CONFIG=${release.machine.systemManagerConfig} \
+        CONFIG=${resolvedSystemManagerConfig} \
         M=${release.machine.systemManagerMonitorMode} \
         SM_CROSS_COMPILE=${crossPrefix}
 
@@ -54,7 +59,7 @@ in
       runHook preInstall
 
       install -Dm0444 \
-        build/${release.machine.systemManagerConfig}/${release.machine.systemManagerImage} \
+        build/${resolvedSystemManagerConfig}/${release.machine.systemManagerImage} \
         "$out/${release.machine.systemManagerImage}"
 
       runHook postInstall
@@ -62,6 +67,7 @@ in
 
     passthru = {
       inherit release;
+      systemManagerConfig = resolvedSystemManagerConfig;
       artifacts.systemManager = release.machine.systemManagerImage;
       provenance = {
         inherit (component) branch licenseFile;
