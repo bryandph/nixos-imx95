@@ -9,12 +9,11 @@ LPDDR4X training binaries remain operator-supplied. Those components are
 assembled with imx-mkimage's `flash_a55` target, which retains the M33
 System Manager but omits NXP's unrelated prebuilt M7 demonstration.
 
-The source-built provider is available for SD acceptance alongside the
-previous complete-container compatibility provider. The compatibility
-provider remains the module default until source-built SD and eMMC hardware
-acceptance succeeds. Both paths boot a mainline NixOS kernel and the upstream
-`freescale/imx95-15x15-frdm.dtb` through extlinux. Builds never modify a
-device.
+The physically accepted source-built provider is the module default. The
+previous complete-container provider remains available explicitly for
+compatibility and recovery. Both paths boot a mainline NixOS kernel and the
+upstream `freescale/imx95-15x15-frdm.dtb` through extlinux. Builds never
+modify a device.
 
 ## License boundary
 
@@ -83,14 +82,15 @@ nix flake check --impure -j 1
 nix build --impure -j 1 \
   .#packages.aarch64-linux.frdm-imx95-source-boot-container
 nix build --impure -j 1 \
-  .#packages.aarch64-linux.frdm-imx95-source-built-sd-image
+  .#packages.aarch64-linux.frdm-imx95-sd-image
 ```
 
-`frdm-imx95-sd-image` remains the compatibility-provider image during
-hardware acceptance. `frdm-imx95-source-built-sd-image` is the candidate
-image. The checks parse its AHAB inventory, reject missing/corrupt/unsafe
-inputs, compare two clean assemblies byte-for-byte, and verify its exact bytes
-at the raw SD offset.
+`frdm-imx95-sd-image` uses the accepted source-built provider.
+`frdm-imx95-source-built-sd-image` remains as a descriptive alias, while
+`frdm-imx95-compatibility-sd-image` selects the complete NXP container for
+recovery. The checks parse the source-built AHAB inventory, reject
+missing/corrupt/unsafe inputs, compare two clean assemblies byte-for-byte, and
+verify both providers' exact bytes at the raw SD offset.
 
 NixOS consumers should build
 `config.system.build.frdmImx95SdImage`, not the standard module's raw
@@ -103,16 +103,16 @@ vendor-defined 32 KiB offset, and installs a generated U-Boot environment at
 NXP's 7 MiB offset. The environment supplies non-overlapping kernel, DTB, and
 initrd load addresses and makes bootflow consume the generation-aware extlinux
 entry at the FAT root. The 512 MiB FAT `BOOT` partition is marked active for
-NXP U-Boot and mounts at `/boot`, so later NixOS generations update the
-extlinux entry on the real boot filesystem. The ext4 root uses the stable
-`NIXOS_SD` identity and expands on first boot by resolving its kernel
-major/minor identity through sysfs rather than assuming a device-node minor
-number.
+NXP U-Boot. A systemd generator derives `/boot` partition 1 from the physical
+MMC device hosting `/`, so duplicate labels and UUIDs on simultaneously
+attached SD and eMMC media cannot redirect later NixOS generations to the
+wrong extlinux filesystem. The ext4 root uses the stable `NIXOS_SD` identity
+and expands on first boot by resolving its kernel major/minor identity through
+sysfs rather than assuming a device-node minor number.
 
-No flashing app is provided. Preserve an accepted compatibility-provider SD
-card while testing the source-built image. The manual eMMC procedure below
-requires an independently verified target and must not be used for the
-source-built provider until SD cold-boot and reboot acceptance pass.
+No flashing app is provided. Preserve an accepted source-built SD card as the
+recovery path before installing eMMC. The complete-container provider remains
+available if source assembly needs to be ruled out during diagnosis.
 
 ## Install an accepted image to eMMC
 
@@ -167,9 +167,9 @@ the ROM device because of the open
    ```console
    boot_output="$(
      nix build --impure -j 1 --no-link --print-out-paths \
-       .#packages.aarch64-linux.nxp-imx95-boot-container
+       .#packages.aarch64-linux.frdm-imx95-source-boot-container
    )"
-   boot_container="$boot_output/imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all"
+   boot_container="$boot_output/imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55"
    ```
 
 2. With power off, connect the board's USB1/J3 port to the Linux host and
@@ -225,9 +225,6 @@ NXP artifacts may be published.
 
 ```nix
 {
-  hardware.nxp.imx95.bootContainer =
-    inputs.nixos-imx95.packages.${pkgs.system}.frdm-imx95-source-boot-container;
-
   imports = [
     inputs.nixos-imx95.nixosModules.frdm-imx95-core
     inputs.nixos-imx95.nixosModules.frdm-imx95-sd-image
@@ -248,6 +245,7 @@ NXP artifacts may be published.
       "nxp-imx95-lpddr4x-dmem-qb"
       "nxp-imx95-lpddr4x-imem"
       "nxp-imx95-lpddr4x-imem-qb"
+      "nixos-frdm-imx95-compatibility.img.zst"
       "nixos-frdm-imx95.img.zst"
       "nixos-frdm-imx95-source-built.img.zst"
     ];
@@ -257,8 +255,11 @@ NXP artifacts may be published.
 The core module selects a mainline kernel with upstream FRDM support, uses the
 exact upstream DTB, enables extlinux, and configures the A55 console on
 `ttyLP0`. The SD-image module owns only the licensed boot-container boundary
-and deterministic image layout. Omit the explicit `bootContainer` assignment
-to select the complete-container compatibility provider.
+and deterministic image layout. Its default is the source-built provider. To
+recover with the complete-container provider, set
+`hardware.nxp.imx95.bootContainer` to
+`inputs.nixos-imx95.packages.${pkgs.system}.nxp-imx95-boot-container`
+explicitly.
 
 ## Source pointers
 

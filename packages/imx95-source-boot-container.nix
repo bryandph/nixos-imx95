@@ -1,6 +1,7 @@
 {
   bash,
   buildInstance ? null,
+  expectedBootContainerSha256 ? null,
   callPackage,
   coreutils,
   gawk,
@@ -11,6 +12,15 @@
   xxd,
 }: let
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
+  bootContainerExpectedSha256 =
+    if expectedBootContainerSha256 == null
+    then release.machine.bootContainerExpectedSha256
+    else expectedBootContainerSha256;
+  bootContainerExpectedHash = builtins.convertHash {
+    hash = bootContainerExpectedSha256;
+    hashAlgo = "sha256";
+    toHashFormat = "sri";
+  };
   uboot = callPackage ./uboot-imx95-frdm.nix {};
   armTrustedFirmware = callPackage ./imx-atf-imx95.nix {};
   optee = callPackage ./imx-optee-os-imx95.nix {};
@@ -77,8 +87,8 @@ in
       releaseMapping = release;
       componentManifest = sourceComponents ++ firmwareComponents;
       containsM7Application = false;
-      expectedHash = release.machine.bootContainerExpectedHash;
-      expectedSha256 = release.machine.bootContainerExpectedSha256;
+      expectedHash = bootContainerExpectedHash;
+      expectedSha256 = bootContainerExpectedSha256;
       expectedSize = release.machine.bootContainerExpectedSize;
       fileName = release.machine.bootContainerFileName;
       providerKind = "source-assembled";
@@ -112,7 +122,7 @@ in
     check_open_component "${uboot}/u-boot-spl.bin"
     check_open_component "${uboot}/u-boot.bin"
     check_open_component "${armTrustedFirmware}/bl31.bin"
-    check_open_component "${optee}/tee.bin"
+    check_open_component "${optee}/${optee.artifacts.teeRaw}"
     check_open_component "${systemManager}/m33_image.bin"
     check_open_component "${oei}/oei-m33-ddr.bin"
     check_open_component "${imxMkimage}/${imxMkimage.assemblyRoot}/iMX95/soc.mak"
@@ -144,7 +154,7 @@ in
     install -m0644 "${uboot}/u-boot-spl.bin" work/iMX95/u-boot-spl.bin
     install -m0644 "${uboot}/u-boot.bin" work/iMX95/u-boot.bin
     install -m0644 "${armTrustedFirmware}/bl31.bin" work/iMX95/bl31.bin
-    install -m0644 "${optee}/tee.bin" work/iMX95/tee.bin
+    install -m0644 "${optee}/${optee.artifacts.teeRaw}" work/iMX95/tee.bin
     install -m0644 "${systemManager}/m33_image.bin" work/iMX95/m33_image.bin
     install -m0644 "${oei}/oei-m33-ddr.bin" work/iMX95/oei-m33-ddr.bin
     install -m0644 \
@@ -184,9 +194,13 @@ in
       exit 1
     fi
 
-    echo \
-      "${release.machine.bootContainerExpectedSha256}  work/iMX95/flash.bin" | \
-      sha256sum --check --status
+    actual_sha256=$(sha256sum work/iMX95/flash.bin | cut -d' ' -f1)
+    if [ "$actual_sha256" != ${bootContainerExpectedSha256} ]; then
+      echo "assembled boot container identity mismatch" >&2
+      echo "expected: ${bootContainerExpectedSha256}" >&2
+      echo "actual:   $actual_sha256" >&2
+      exit 1
+    fi
 
     install -Dm0444 \
       work/iMX95/flash.bin \

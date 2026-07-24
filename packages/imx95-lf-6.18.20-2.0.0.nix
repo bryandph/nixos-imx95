@@ -37,8 +37,8 @@
     imxMkimageSoc = "iMX95";
     imxMkimageRevision = "B0";
     bootContainerFileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55";
-    bootContainerExpectedHash = "sha256-JvFomROH5DK76vOeBZRvyCkLiaru/tobGBM2svzQ6Ys=";
-    bootContainerExpectedSha256 = "26f168991387e432bbeaf39e05946fc8290b89aaeefeda1b181336b2fcd0e98b";
+    bootContainerExpectedHash = "sha256-5s1YjWQg/daHJI2gwb1A7JR539qJWhuqfo8SM821g5g=";
+    bootContainerExpectedSha256 = "e6cd588d6420fdd687248da0c1bd40ec9479dfda895a1baa7e8f1233cdb58398";
     bootContainerExpectedSize = 2997248;
     bootContainerOffsetKiB = 32;
     reservedBootRegionMiB = 8;
@@ -120,6 +120,7 @@
       licenseFile = "LICENSE";
       build = {
         target = "all";
+        artifact = "tee-raw.bin";
         flags = [
           "PLATFORM=imx"
           "PLATFORM_FLAVOR=mx95evk"

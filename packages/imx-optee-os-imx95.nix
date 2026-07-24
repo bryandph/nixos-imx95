@@ -21,7 +21,7 @@ in
 
     passthru = {
       inherit release;
-      artifacts.teeRaw = "tee-raw.bin";
+      artifacts.teeRaw = component.build.artifact;
       provenance = {
         inherit (component) branch licenseFile;
         inherit (component.fetchFromGitHub) owner repo rev sha256;

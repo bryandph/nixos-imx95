@@ -24,6 +24,7 @@
           "nxp-imx95-lpddr4x-dmem-qb"
           "nxp-imx95-lpddr4x-imem"
           "nxp-imx95-lpddr4x-imem-qb"
+          "nixos-frdm-imx95-compatibility.img.zst"
           "nixos-frdm-imx95.img.zst"
           "nixos-frdm-imx95-source-built.img.zst"
         ];

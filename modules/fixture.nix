@@ -21,6 +21,7 @@
     "nxp-imx95-lpddr4x-dmem-qb"
     "nxp-imx95-lpddr4x-imem"
     "nxp-imx95-lpddr4x-imem-qb"
+    "nixos-frdm-imx95-compatibility.img.zst"
     "nixos-frdm-imx95.img.zst"
     "nixos-frdm-imx95-source-built.img.zst"
   ];
@@ -65,10 +66,14 @@ in {
 
     frdm-imx95-source-built = mkBoard {
       imageBaseName = "nixos-frdm-imx95-source-built";
+    };
+
+    frdm-imx95-compatibility = mkBoard {
+      imageBaseName = "nixos-frdm-imx95-compatibility";
       modules = [
         ({pkgs, ...}: {
           hardware.nxp.imx95.bootContainer =
-            pkgs.callPackage ../packages/imx95-source-boot-container.nix {};
+            pkgs.callPackage ../packages/nxp-imx95-boot-container.nix {};
         })
       ];
     };
@@ -82,11 +87,13 @@ in {
     lib.mkIf (system == "aarch64-linux") (
       let
         board = config.flake.nixosConfigurations.frdm-imx95;
-        sourceBoard = config.flake.nixosConfigurations.frdm-imx95-source-built;
-        bootContainer = board.config.hardware.nxp.imx95.bootContainer;
-        bootContainerName = bootContainer.fileName;
+        sourceBoard = board;
+        compatibilityBoard = config.flake.nixosConfigurations.frdm-imx95-compatibility;
+        compatibilityBootContainer = compatibilityBoard.config.hardware.nxp.imx95.bootContainer;
+        compatibilityBootContainerName = compatibilityBootContainer.fileName;
         sdImage = board.config.system.build.frdmImx95SdImage;
         sourceSdImage = sourceBoard.config.system.build.frdmImx95SdImage;
+        compatibilitySdImage = compatibilityBoard.config.system.build.frdmImx95SdImage;
         configuredSourceBootContainer = sourceBoard.config.hardware.nxp.imx95.bootContainer;
         sourceManifestNames =
           map
@@ -145,11 +152,14 @@ in {
         };
         failedAssertions = boardConfig:
           builtins.filter (assertion: !assertion.assertion) boardConfig.config.assertions;
-        bootContainerOffsetBytes = board.config.hardware.nxp.imx95.bootContainerOffsetKiB * 1024;
+        compatibilityBootContainerOffsetBytes =
+          compatibilityBoard.config.hardware.nxp.imx95.bootContainerOffsetKiB * 1024;
         sourceBootContainerOffsetBytes =
           sourceBoard.config.hardware.nxp.imx95.bootContainerOffsetKiB * 1024;
         ubootEnvironmentOffsetBytes =
           board.config.hardware.nxp.imx95.ubootEnvironmentOffsetKiB * 1024;
+        compatibilityUbootEnvironmentOffsetBytes =
+          compatibilityBoard.config.hardware.nxp.imx95.ubootEnvironmentOffsetKiB * 1024;
         firmwareOffsetBytes = board.config.sdImage.firmwarePartitionOffset * 1024 * 1024;
         rootOffsetBytes =
           (board.config.sdImage.firmwarePartitionOffset + board.config.sdImage.firmwareSize)
@@ -169,12 +179,13 @@ in {
           frdm-imx95-sd-image = sdImage;
           frdm-imx95-source-boot-container = sourceBootContainer;
           frdm-imx95-source-built-sd-image = sourceSdImage;
+          frdm-imx95-compatibility-sd-image = compatibilitySdImage;
           imx-atf-imx95 = armTrustedFirmware;
           imx-mkimage-imx95 = imxMkimage;
           imx-oei-imx95-frdm = oei;
           imx-optee-os-imx95 = optee;
           imx-system-manager-imx95 = systemManager;
-          nxp-imx95-boot-container = bootContainer;
+          nxp-imx95-boot-container = compatibilityBootContainer;
           nxp-imx95-ele-firmware = licensedFirmware.ele;
           nxp-imx95-lpddr4x-dmem = licensedFirmware.lpddr4xDmem;
           nxp-imx95-lpddr4x-dmem-qb = licensedFirmware.lpddr4xDmemQuickBoot;
@@ -186,22 +197,31 @@ in {
 
         checks = {
           module-evaluation = pkgs.runCommand "frdm-imx95-module-evaluation" {} ''
-            test ${lib.escapeShellArg bootContainer.providerKind} = \
-              nxp-complete-container
-            test ${lib.escapeShellArg bootContainer.release} = \
+            test ${lib.escapeShellArg configuredSourceBootContainer.providerKind} = \
+              source-assembled
+            test ${lib.escapeShellArg configuredSourceBootContainer.release} = \
               6.18.20-2.0.0
-            test ${lib.escapeShellArg bootContainer.fileName} = \
-              imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all
-            test ${toString bootContainer.expectedSize} -eq \
+            test ${lib.escapeShellArg configuredSourceBootContainer.fileName} = \
+              imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55
+            test ${toString configuredSourceBootContainer.expectedSize} -eq \
               ${toString board.config.hardware.nxp.imx95.bootContainerSizeBytes}
-            test ${toString bootContainer.bootContainerOffsetKiB} -eq \
+            test ${toString configuredSourceBootContainer.bootContainerOffsetKiB} -eq \
               ${toString board.config.hardware.nxp.imx95.bootContainerOffsetKiB}
             test ${lib.escapeShellArg board.config.hardware.deviceTree.name} = \
               freescale/imx95-15x15-frdm.dtb
             test ${lib.escapeShellArg board.config.fileSystems."/".device} = \
               /dev/disk/by-label/NIXOS_SD
-            test ${lib.escapeShellArg board.config.fileSystems."/boot".device} = \
-              /dev/disk/by-label/BOOT
+            test ${
+              if builtins.hasAttr "/boot" board.config.fileSystems
+              then "1"
+              else "0"
+            } = 0
+            bootGenerator=${
+              lib.escapeShellArg board.config.systemd.generators.frdm-imx95-root-boot
+            }
+            test -x "$bootGenerator"
+            grep -q 'rootMajorMinor=' "$bootGenerator"
+            grep -q 'bootPartition=' "$bootGenerator"
             test ${
               if builtins.hasAttr "/boot/firmware" board.config.fileSystems
               then "1"
@@ -229,6 +249,28 @@ in {
             } = 0
             test ${
               if sdImage.meta.license.redistributable
+              then "1"
+              else "0"
+            } = 0
+            touch "$out"
+          '';
+
+          compatibility-provider-evaluation = pkgs.runCommand "frdm-imx95-compatibility-provider-evaluation" {} ''
+            test ${lib.escapeShellArg compatibilityBootContainer.providerKind} = \
+              nxp-complete-container
+            test ${lib.escapeShellArg compatibilityBootContainer.release} = \
+              6.18.20-2.0.0
+            test ${lib.escapeShellArg compatibilityBootContainer.fileName} = \
+              imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_all
+            test ${toString compatibilityBootContainer.expectedSize} -eq \
+              ${toString compatibilityBoard.config.hardware.nxp.imx95.bootContainerSizeBytes}
+            test ${
+              if compatibilitySdImage.allowSubstitutes
+              then "1"
+              else "0"
+            } = 0
+            test ${
+              if compatibilitySdImage.meta.license.redistributable
               then "1"
               else "0"
             } = 0
@@ -396,6 +438,17 @@ in {
                 -parse \
                 "${configuredSourceBootContainer}/${configuredSourceBootContainer.fileName}" \
                 > inventory.txt
+              ${imxMkimage}/bin/mkimage_imx8 \
+                -soc IMX9 \
+                -extract \
+                "${configuredSourceBootContainer}/${configuredSourceBootContainer.fileName}" \
+                > /dev/null
+
+              install -m0644 "${optee}/${optee.artifacts.teeRaw}" expected-tee.bin
+              truncate \
+                -s "$(stat -c %s extracted_imgs/app_container1_img3.bin)" \
+                expected-tee.bin
+              cmp expected-tee.bin extracted_imgs/app_container1_img3.bin
 
               grep -q 'IMAGE 1 (ELE FW)' inventory.txt
               grep -q 'IMAGE 2 (DDR Init)' inventory.txt
@@ -493,7 +546,7 @@ in {
                 pkgs.zstd
               ];
             } ''
-              image=$(echo ${sdImage}/sd-image/*.img.zst)
+              image=$(echo ${compatibilitySdImage}/sd-image/*.img.zst)
               zstd --decompress --stdout "$image" > image.img
 
               firstStart=$(sfdisk --json image.img |
@@ -510,15 +563,17 @@ in {
               test "$firstBootable" = true
               test "$secondBootable" = false
 
-              dd if=image.img bs=1 skip=${toString bootContainerOffsetBytes} \
-                count=${toString board.config.hardware.nxp.imx95.bootContainerSizeBytes} \
+              dd if=image.img bs=1 skip=${toString compatibilityBootContainerOffsetBytes} \
+                count=${toString compatibilityBoard.config.hardware.nxp.imx95.bootContainerSizeBytes} \
                 status=none |
-                cmp - "${bootContainer}/${bootContainerName}"
+                cmp - \
+                  "${compatibilityBootContainer}/${compatibilityBootContainerName}"
 
-              dd if=image.img bs=1 skip=${toString ubootEnvironmentOffsetBytes} \
-                count=${toString board.config.hardware.nxp.imx95.ubootEnvironmentSizeBytes} \
+              dd if=image.img bs=1 skip=${toString compatibilityUbootEnvironmentOffsetBytes} \
+                count=${toString compatibilityBoard.config.hardware.nxp.imx95.ubootEnvironmentSizeBytes} \
                 status=none > uboot.env
               grep -a -q 'bootcmd=bootflow scan -lb' uboot.env
+              grep -a -q 'boot_targets=mmc1 mmc0' uboot.env
               grep -a -q 'boot_prefixes=/' uboot.env
               grep -a -q 'fdt_addr_r=0x95000000' uboot.env
               grep -a -q 'ramdisk_addr_r=0x98000000' uboot.env

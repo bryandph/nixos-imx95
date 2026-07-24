@@ -7,7 +7,7 @@
     ...
   }: let
     cfg = config.hardware.nxp.imx95;
-    defaultBootContainer = pkgs.callPackage ../../../packages/nxp-imx95-boot-container.nix {};
+    defaultBootContainer = pkgs.callPackage ../../../packages/imx95-source-boot-container.nix {};
     provider =
       if cfg.bootContainer == null
       then {}
@@ -58,7 +58,9 @@
         description = ''
           Boot-container provider implementing the nixos-imx95 metadata
           contract. Providers may assemble from source plus granular licensed
-          firmware or wrap a hash-verified complete NXP container.
+          firmware or wrap a hash-verified complete NXP container. The default
+          assembles the release-pinned source provider; select the complete
+          NXP container explicitly only for compatibility or recovery.
         '';
       };
 
@@ -156,11 +158,44 @@
       # generic SD-image module's noauto /boot/firmware mount would leave those
       # updates on the root filesystem instead of the FAT boot partition.
       fileSystems."/boot/firmware".enable = lib.mkForce false;
-      fileSystems."/boot" = {
-        device = "/dev/disk/by-label/BOOT";
-        fsType = "vfat";
-        options = ["nofail"];
-      };
+      fileSystems."/boot".enable = lib.mkForce false;
+
+      # SD and eMMC may contain byte-identical images, including duplicate
+      # labels and partition UUIDs. Resolve /boot from the device hosting /
+      # so udev cannot redirect the mount when the other medium enumerates.
+      systemd.generators.frdm-imx95-root-boot =
+        pkgs.writeShellScript
+        "frdm-imx95-root-boot-generator"
+        ''
+          outputDirectory="$1"
+          rootMajorMinor=$(${lib.getExe' pkgs.util-linux "findmnt"} -nr -o MAJ:MIN /)
+          rootSysfs=$(${lib.getExe' pkgs.coreutils "readlink"} -f \
+            "/sys/dev/block/$rootMajorMinor")
+          parentSysfs=''${rootSysfs%/*}
+          bootName=''${parentSysfs##*/}
+
+          case "$bootName" in
+            mmcblk*) bootPartition="/dev/''${bootName}p1" ;;
+            *) exit 0 ;;
+          esac
+
+          ${lib.getExe' pkgs.coreutils "mkdir"} -p \
+            "$outputDirectory/local-fs.target.requires"
+          ${lib.getExe' pkgs.coreutils "cat"} > "$outputDirectory/boot.mount" <<EOF
+          [Unit]
+          Description=FRDM-i.MX95 boot partition matching the root device
+          Before=local-fs.target
+
+          [Mount]
+          What=$bootPartition
+          Where=/boot
+          Type=vfat
+          Options=defaults
+          DirectoryMode=0755
+          EOF
+          ${lib.getExe' pkgs.coreutils "ln"} -s ../boot.mount \
+            "$outputDirectory/local-fs.target.requires/boot.mount"
+        '';
 
       sdImage = {
         compressImage = true;
@@ -197,6 +232,7 @@
 
           cat > uboot.env.txt <<'EOF'
           bootcmd=bootflow scan -lb
+          boot_targets=mmc1 mmc0
           bootdelay=2
           boot_prefixes=/
           kernel_addr_r=0x90400000
