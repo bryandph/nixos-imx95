@@ -1,0 +1,15 @@
+[build]
+target = "thumbv7em-none-eabihf"
+
+[net]
+git-fetch-with-cli = true
+
+[target.thumbv7em-none-eabihf]
+rustflags = [
+  "-C",
+  "link-arg=--nmagic",
+  "-C",
+  "link-arg=-Tlink.x",
+  "-C",
+  "link-arg=-Tresource-table.x",
+]

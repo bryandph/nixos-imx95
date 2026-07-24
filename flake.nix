@@ -9,6 +9,11 @@
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
 
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     import-tree.url = "github:vic/import-tree";
 
     treefmt-nix = {

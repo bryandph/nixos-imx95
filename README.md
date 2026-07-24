@@ -92,6 +92,22 @@ recovery. The checks parse the source-built AHAB inventory, reject
 missing/corrupt/unsafe inputs, compare two clean assemblies byte-for-byte, and
 verify both providers' exact bytes at the raw SD offset.
 
+## Optional M7 remoteproc development
+
+The exported `frdm-imx95-m7-remoteproc` NixOS module adds the upstream
+`fsl,imx95-cm7` remoteproc node to the mainline FRDM device tree. It is not
+part of the default board composition, does not install or auto-start
+firmware, and does not add an M7 payload to the boot container.
+
+The first public firmware target is the original MIT-licensed Embassy-Rust
+application under `firmware/frdm-imx95-m7-smoke`, exposed as the
+`frdm-imx95-m7-smoke` package and built as a remoteproc-loadable Cortex-M7
+ELF. NXP's release archive contains only a raw, licensed power-mode
+demonstration binary; its identity and the corresponding public BSD-3-Clause
+MCUXpresso source pointers are recorded in
+`packages/imx95-lf-6.18.20-2.0.0.nix`, but no NXP demo artifact enters this
+repository or its public build.
+
 NixOS consumers should build
 `config.system.build.frdmImx95SdImage`, not the standard module's raw
 `config.system.build.sdImage`; the FRDM-specific output carries the unfree,

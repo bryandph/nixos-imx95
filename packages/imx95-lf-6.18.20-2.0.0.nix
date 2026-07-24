@@ -63,6 +63,133 @@
     };
   };
 
+  m7 = {
+    manifest = {
+      repository = "https://github.com/nxp-mcuxpresso/mcuxsdk-manifests";
+      tag = "v26.06.00-LTS";
+      rev = "b01ab9032249f0d10cf6791ee4d7de45dfb19166";
+    };
+    sourceReferences = {
+      examples = {
+        repository = "https://github.com/nxp-mcuxpresso/mcuxsdk-examples";
+        rev = "37b89171f47d36e2e71eec730e2353d2c2986f04";
+        license = lib.licenses.bsd3;
+        applicationPath = "demo_apps/power_mode_switch_imx95/power_mode_switch.c";
+        boardPath = "_boards/frdmimx95/demo_apps/power_mode_switch/cm7";
+      };
+      core = {
+        repository = "https://github.com/nxp-mcuxpresso/mcuxsdk-core";
+        rev = "a910e7645d2d809a3431e1d5f42fca1cdeee69c9";
+        license = lib.licenses.bsd3;
+      };
+      devices = {
+        repository = "https://github.com/nxp-mcuxpresso/mcux-devices-imx";
+        rev = "e8e41cc8dca0f2616e34c5c8a7990b1567a0242f";
+        license = lib.licenses.bsd3;
+        deviceHeaderPath = "i.MX95/MIMX9596/MIMX9596_cm7_COMMON.h";
+        lpuartRegisterHeaderPath = "i.MX95/periph/PERI_LPUART.h";
+      };
+    };
+    remoteproc = {
+      upstream = {
+        repository = "https://github.com/torvalds/linux";
+        tag = "v7.1";
+        rev = "8cd9520d35a6c38db6567e97dd93b1f11f185dc6";
+        driverPath = "drivers/remoteproc/imx_rproc.c";
+        bindingPath = "Documentation/devicetree/bindings/remoteproc/fsl,imx-rproc.yaml";
+      };
+      nxpReference = {
+        repository = "https://github.com/nxp-imx/linux-imx";
+        branch = "lf-6.18.20-2.0.0";
+        rev = "b096ce610e956cc2596006343df8a2a26ed6e019";
+        boardDtsPath = "arch/arm64/boot/dts/freescale/imx95-15x15-frdm.dts";
+        rpmsgDtsPath = "arch/arm64/boot/dts/freescale/imx95-15x15-frdm-rpmsg.dts";
+      };
+      compatible = "fsl,imx95-cm7";
+      firmwareFormat = "elf32-littlearm";
+      vendorDemoFormat = "raw-binary";
+      tcm = {
+        code = {
+          deviceAddress = "0x00000000";
+          systemAddress = "0x203c0000";
+          size = "0x00040000";
+        };
+        data = {
+          deviceAddress = "0x20000000";
+          systemAddress = "0x20400000";
+          size = "0x00040000";
+        };
+      };
+      mailbox = {
+        controller = "mu7";
+        channels = [
+          "tx:0:1"
+          "rx:1:1"
+          "rxdb:3:1"
+        ];
+      };
+      sharedMemory = {
+        vdevBuffer = {
+          address = "0x88020000";
+          size = "0x00100000";
+        };
+        vrings = [
+          {
+            address = "0x88000000";
+            size = "0x00008000";
+          }
+          {
+            address = "0x88008000";
+            size = "0x00008000";
+          }
+          {
+            address = "0x88010000";
+            size = "0x00008000";
+          }
+          {
+            address = "0x88018000";
+            size = "0x00008000";
+          }
+        ];
+        resourceTable = {
+          address = "0x88220000";
+          size = "0x00001000";
+        };
+      };
+      baseline = {
+        driverSupported = true;
+        sharedMemoryReserved = true;
+        mu7Enabled = true;
+        cm7NodePresent = false;
+      };
+      deferredRpmsgOwnership = {
+        ddrCarveout = {
+          address = "0x80000000";
+          size = "0x01000000";
+        };
+        disables = [
+          "edma1"
+          "edma2"
+        ];
+      };
+    };
+    publicDemo = {
+      license = "MIT";
+      firstSlice = [
+        "cortex-m-runtime"
+        "embassy-executor"
+        "lpuart3-output"
+        "systick-heartbeat"
+      ];
+      excludedUntilLifecycleValidation = [
+        "m7-low-power"
+        "scmi-system-manager"
+        "a55-suspend-wake"
+        "rpmsg"
+      ];
+    };
+  };
+
   sources = {
     uboot = {
       pname = "uboot-imx95-frdm";
@@ -221,6 +348,26 @@
           size = 175488;
         }
       ];
+    };
+
+    m7PowerModeDemo = {
+      distribution = {
+        fileName = "LF_v6.18.20-2.0.0_images_IMX95EVK.zip";
+        sha256 = "76149ba07ae8a42e32a52a461f21d90c88ef44f1a6f79de7b7afe85536a1e903";
+        size = 4779306360;
+      };
+      member = {
+        fileName = "imx95-15x15-frdm_m7_TCM_power_mode_switch.bin";
+        archivePath = "imx_mcore_demos/imx95-15x15-frdm_m7_TCM_power_mode_switch.bin";
+        sha256 = "15141ba5c66504131b45c5daf29f2cf1a75273cff8f18f0cc205aa3a4d57cdb9";
+        size = 35916;
+      };
+      provenance = {
+        sourceCompositionReportPackage = "imx95-m7-demo-26.06.00.bin";
+        outgoingLicense = "LA_OPT_NXP_Software_License v63 May 2025";
+        additionalDistributionSection = "2.3";
+        redistributable = false;
+      };
     };
 
     ddr = {

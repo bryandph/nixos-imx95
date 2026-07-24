@@ -4,6 +4,11 @@
   lib,
   ...
 }: let
+  release = import ../packages/imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
+  m7Vring0 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 0;
+  m7Vring1 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 1;
+  m7Vring2 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 2;
+  m7Vring3 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 3;
   allowedUnfreeNames = [
     "frdm-imx95-source-boot-container"
     "frdm-imx95-source-container-reproducibility"
@@ -22,6 +27,7 @@
     "nxp-imx95-lpddr4x-imem"
     "nxp-imx95-lpddr4x-imem-qb"
     "nixos-frdm-imx95-compatibility.img.zst"
+    "nixos-frdm-imx95-m7-remoteproc.img.zst"
     "nixos-frdm-imx95.img.zst"
     "nixos-frdm-imx95-source-built.img.zst"
   ];
@@ -68,6 +74,13 @@ in {
       imageBaseName = "nixos-frdm-imx95-source-built";
     };
 
+    frdm-imx95-m7-remoteproc = mkBoard {
+      imageBaseName = "nixos-frdm-imx95-m7-remoteproc";
+      modules = [
+        config.flake.modules.nixos.frdm-imx95-m7-remoteproc
+      ];
+    };
+
     frdm-imx95-compatibility = mkBoard {
       imageBaseName = "nixos-frdm-imx95-compatibility";
       modules = [
@@ -87,6 +100,7 @@ in {
     lib.mkIf (system == "aarch64-linux") (
       let
         board = config.flake.nixosConfigurations.frdm-imx95;
+        m7Board = config.flake.nixosConfigurations.frdm-imx95-m7-remoteproc;
         sourceBoard = board;
         compatibilityBoard = config.flake.nixosConfigurations.frdm-imx95-compatibility;
         compatibilityBootContainer = compatibilityBoard.config.hardware.nxp.imx95.bootContainer;
@@ -123,6 +137,29 @@ in {
         oei = pkgs.callPackage ../packages/imx-oei-imx95-frdm.nix {};
         imxMkimage = pkgs.callPackage ../packages/imx-mkimage-imx95.nix {};
         licensedFirmware = pkgs.callPackage ../packages/imx95-licensed-firmware.nix {};
+        rustToolchain = let
+          fenix = inputs.fenix.packages.${system};
+          native = fenix.toolchainOf {
+            channel = "1.85.1";
+            sha256 = "sha256-Hn2uaQzRLidAWpfmRwSRdImifGUCAb9HeAqTYFXWeQk=";
+          };
+          target = fenix.targets.thumbv7em-none-eabihf.toolchainOf {
+            channel = "1.85.1";
+            sha256 = "sha256-Hn2uaQzRLidAWpfmRwSRdImifGUCAb9HeAqTYFXWeQk=";
+          };
+        in
+          fenix.combine [
+            native.cargo
+            native.rustc
+            target.rust-std
+          ];
+        firmwareRustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+        m7SmokeFirmware = pkgs.callPackage ../packages/frdm-imx95-m7-smoke.nix {
+          rustPlatform = firmwareRustPlatform;
+        };
         sourceBootContainer = pkgs.callPackage ../packages/imx95-source-boot-container.nix {};
         sourceBootContainerReproA = pkgs.callPackage ../packages/imx95-source-boot-container.nix {
           buildInstance = "repro-a";
@@ -170,6 +207,7 @@ in {
           inherit
             armTrustedFirmware
             imxMkimage
+            m7SmokeFirmware
             oei
             optee
             sdImage
@@ -177,6 +215,7 @@ in {
             uboot
             ;
           frdm-imx95-sd-image = sdImage;
+          frdm-imx95-m7-smoke = m7SmokeFirmware;
           frdm-imx95-source-boot-container = sourceBootContainer;
           frdm-imx95-source-built-sd-image = sourceSdImage;
           frdm-imx95-compatibility-sd-image = compatibilitySdImage;
@@ -196,6 +235,86 @@ in {
         };
 
         checks = {
+          m7-firmware-layout =
+            pkgs.runCommand "frdm-imx95-m7-firmware-layout" {
+              nativeBuildInputs = [
+                pkgs.binutils
+                pkgs.jq
+              ];
+            } ''
+              elf=${m7SmokeFirmware}/${m7SmokeFirmware.firmwarePath}
+              provenance=${m7SmokeFirmware}/share/frdm-imx95-m7-smoke/provenance.json
+              headers=$(readelf --file-header "$elf")
+
+              grep -q 'Class:.*ELF32' <<<"$headers"
+              grep -q "Data:.*2's complement, little endian" <<<"$headers"
+              grep -q 'Machine:.*ARM' <<<"$headers"
+              grep -q 'Type:.*EXEC' <<<"$headers"
+              grep -q 'Entry point address:.*0x401' <<<"$headers"
+              grep -q 'hard-float ABI' <<<"$headers"
+
+              assert_section_range() {
+                local section="$1"
+                local range_start="$2"
+                local range_end="$3"
+                local fields
+                local address
+                local size
+                local section_end
+
+                range_start=$((range_start))
+                range_end=$((range_end))
+                fields=$(
+                  readelf --wide --sections "$elf" |
+                    awk -v section="$section" '$3 == section { print $5, $7 }'
+                )
+                test -n "$fields"
+                set -- $fields
+                address=$((0x$1))
+                size=$((0x$2))
+                section_end=$((address + size))
+                test "$address" -ge "$range_start"
+                test "$section_end" -le "$range_end"
+              }
+
+              assert_section_range .vector_table 0x00000000 0x00040000
+              assert_section_range .text 0x00000000 0x00040000
+              assert_section_range .rodata 0x00000000 0x00040000
+              assert_section_range .resource_table 0x00000000 0x00040000
+              assert_section_range .data 0x20000000 0x20040000
+              assert_section_range .bss 0x20000000 0x20040000
+              assert_section_range .uninit 0x20000000 0x20040000
+
+              resource_size=$(
+                readelf --wide --sections "$elf" |
+                  awk '$3 == ".resource_table" { print $7 }'
+              )
+              test "$resource_size" = 000010
+
+              jq -e '
+                .firmware.license == "MIT" and
+                .bsp.license == "MIT OR Apache-2.0" and
+                .bsp.rev == "8b92ab5b228aaee86fa5ee0df6534d944e3c8e67" and
+                .bsp.archiveHash ==
+                  "sha256-McLRisrw6Z0NHQxNCkKIy7c7ZXw2n2iW6GkxplIfwO4=" and
+                .rust.target == "thumbv7em-none-eabihf" and
+                .rust.toolchain == "1.85.1"
+              ' "$provenance" >/dev/null
+
+              test ${
+                if m7SmokeFirmware.licensedNxpArtifacts == []
+                then "1"
+                else "0"
+              } = 1
+              test "$(find ${m7SmokeFirmware} -type f | wc -l)" -eq 2
+              test -z "$(
+                find ${m7SmokeFirmware} -type f \
+                  \( -name '*.bin' -o -name '*.img' -o -name '*.fw' \)
+              )"
+
+              touch "$out"
+            '';
+
           module-evaluation = pkgs.runCommand "frdm-imx95-module-evaluation" {} ''
             test ${lib.escapeShellArg configuredSourceBootContainer.providerKind} = \
               source-assembled
@@ -480,6 +599,56 @@ in {
               cmp \
                 "${sourceBootContainerReproA}/${sourceBootContainerReproA.fileName}" \
                 "${sourceBootContainerReproB}/${sourceBootContainerReproB.fileName}"
+              touch "$out"
+            '';
+
+          m7-remoteproc-dtb =
+            pkgs.runCommand "frdm-imx95-m7-remoteproc-dtb" {
+              nativeBuildInputs = [
+                pkgs.dtc
+                pkgs.gnutar
+                pkgs.xz
+              ];
+            } ''
+              m7Dtb=${m7Board.config.hardware.deviceTree.package}/freescale/imx95-15x15-frdm.dtb
+              baselineDtb=${board.config.hardware.deviceTree.package}/freescale/imx95-15x15-frdm.dtb
+              kernelSrc=${m7Board.config.boot.kernelPackages.kernel.src}
+              tar -xOf "$kernelSrc" --wildcards '*/drivers/remoteproc/imx_rproc.c' \
+                > imx_rproc.c
+
+              dtc -I dtb -O dts "$m7Dtb" > m7.dts
+              grep -q 'compatible = "fsl,imx95-cm7"' m7.dts
+              grep -q 'mbox-names = "tx", "rx", "rxdb"' m7.dts
+              grep -q 'memory-region = ' m7.dts
+
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88000000 reg)" =                 "0 88000000 0 8000"
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88008000 reg)" =                 "0 88008000 0 8000"
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88010000 reg)" =                 "0 88010000 0 8000"
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88018000 reg)" =                 "0 88018000 0 8000"
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88020000 reg)" =                 "0 88020000 0 100000"
+              test "$(fdtget -t x "$m7Dtb" /reserved-memory/memory@88220000 reg)" =                 "0 88220000 0 1000"
+
+              set -- $(fdtget -t x "$m7Dtb" /imx95-cm7 mboxes)
+              test "$#" -eq 9
+              set -- $(fdtget -t x "$m7Dtb" /imx95-cm7 memory-region)
+              test "$#" -eq 6
+
+              grep -q                 '{ 0x00000000, 0x203C0000, 0x00040000, ATT_OWN | ATT_IOMEM }'                 imx_rproc.c
+              grep -q                 '{ 0x20000000, 0x20400000, 0x00040000, ATT_OWN | ATT_IOMEM }'                 imx_rproc.c
+
+              test $(( ${release.m7.remoteproc.tcm.code.systemAddress} + ${release.m7.remoteproc.tcm.code.size} ))                 -le $(( ${release.m7.remoteproc.tcm.data.systemAddress} ))
+              test $(( ${m7Vring0.address} + ${m7Vring0.size} ))                 -le $(( ${m7Vring1.address} ))
+              test $(( ${m7Vring1.address} + ${m7Vring1.size} ))                 -le $(( ${m7Vring2.address} ))
+              test $(( ${m7Vring2.address} + ${m7Vring2.size} ))                 -le $(( ${m7Vring3.address} ))
+              test $(( ${m7Vring3.address} + ${m7Vring3.size} ))                 -le $(( ${release.m7.remoteproc.sharedMemory.vdevBuffer.address} ))
+              test $(( ${release.m7.remoteproc.sharedMemory.vdevBuffer.address} + ${release.m7.remoteproc.sharedMemory.vdevBuffer.size} ))                 -le $(( ${release.m7.remoteproc.sharedMemory.resourceTable.address} ))
+
+              dtc -I dtb -O dts "$baselineDtb" > baseline.dts
+              if grep -q 'compatible = "fsl,imx95-cm7"' baseline.dts; then
+                echo "M7 remoteproc unexpectedly entered the baseline device tree" >&2
+                exit 1
+              fi
+
               touch "$out"
             '';
 
