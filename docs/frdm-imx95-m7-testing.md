@@ -25,10 +25,9 @@ these persistent by-id paths:
 ```
 
 A harmless blank-line probe identifies `if00` as the A55 console and `if02` as
-the System Manager debug monitor. Both `if04` and `if06` are quiet on the
-accepted eMMC boot. Identify the M7 path empirically from the Embassy smoke
-banner after the optional image starts it; the other quiet path is the unused
-fourth channel.
+the System Manager debug monitor. Hardware testing with the M7-owned LPUART3
+route confirms `if04` as the M7 console; `if06` is the unused fourth channel.
+Both remain quiet while the M7 is offline.
 
 ## Identify and capture the M7 UART
 
@@ -38,15 +37,15 @@ List the CH34x ports on the UART host:
 ssh cm5devkit frdm-imx95-m7-ctl uart-list
 ```
 
-Do not rely on the order in which four device names appear. Open or capture all
-four at 115200 baud, 8 data bits, no parity, and one stop bit before power-on.
-Classify them by observed output:
+Do not rely on volatile `ttyACM` numbering. Open the confirmed `if04` by-id
+path at 115200 baud, 8 data bits, no parity, and one stop bit before starting
+the M7. The complete observed mapping is:
 
-- the A55 port carries the Linux boot console and login;
-- the System Manager port carries early management-firmware messages;
-- the M7 port is quiet until remoteproc starts, then prints
+- `if00` carries the A55 Linux boot console and login;
+- `if02` carries early System Manager messages and its debug monitor;
+- `if04` is quiet until remoteproc starts, then prints
   `frdm-imx95-m7-smoke v0.1.0`;
-- retain the fourth capture even when it is quiet.
+- `if06` is the spare channel.
 
 Capture a selected port:
 
@@ -56,10 +55,8 @@ ssh -t cm5devkit frdm-imx95-m7-ctl uart \
   m7-uart-if04.log
 ```
 
-Capture `if06` in a second session until the smoke banner establishes which
-path is the M7. Record the confirmed by-id path in this document and the issue
-evidence. That observed identity is stable across tty renumbering; a guessed
-`ttyACM` number is not.
+The confirmed by-id identity is stable across tty renumbering; the currently
+observed `/dev/ttyACM2` alias is not.
 
 ## Verify SD boot before touching remoteproc
 

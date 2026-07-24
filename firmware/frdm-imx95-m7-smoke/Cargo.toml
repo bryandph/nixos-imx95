@@ -8,9 +8,9 @@ description = "Harmless Embassy UART/timer smoke firmware for the FRDM-i.MX95 M7
 publish = false
 
 [dependencies]
-bsp-frdm-imx95 = { git = "https://git.bph/bryan/frdm-imx95-bsp.git", rev = "6f993f961a58e58a7c97e908890211779956cdce" }
+bsp-frdm-imx95 = { git = "https://git.bph/bryan/frdm-imx95-bsp.git", rev = "2ecc166a18c4a00853a5a316bbcba6d91147bc85" }
 cortex-m = { version = "0.7.7", features = ["cm7", "critical-section-single-core"] }
-cortex-m-rt = "0.7.5"
+cortex-m-rt = { version = "0.7.5", features = ["zero-init-ram"] }
 embassy-executor = { version = "0.10.0", features = ["executor-thread", "platform-cortex-m"] }
 panic-halt = "1.0.0"
 
