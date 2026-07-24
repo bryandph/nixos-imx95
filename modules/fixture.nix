@@ -215,6 +215,8 @@ in {
             uboot
             ;
           frdm-imx95-sd-image = sdImage;
+          frdm-imx95-m7-remoteproc-sd-image =
+            m7Board.config.system.build.frdmImx95SdImage;
           frdm-imx95-m7-smoke = m7SmokeFirmware;
           frdm-imx95-source-boot-container = sourceBootContainer;
           frdm-imx95-source-built-sd-image = sourceSdImage;

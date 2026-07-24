@@ -1,0 +1,326 @@
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly m7_compatible="fsl,imx95-cm7"
+readonly default_firmware="frdm-imx95/frdm-imx95-m7-smoke.elf"
+readonly remoteproc_class="/sys/class/remoteproc"
+readonly transition_timeout=15
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  frdm-imx95-m7-ctl status
+  frdm-imx95-m7-ctl start [FIRMWARE]
+  frdm-imx95-m7-ctl stop
+  frdm-imx95-m7-ctl recover [FIRMWARE]
+  frdm-imx95-m7-ctl cycle [COUNT]
+  frdm-imx95-m7-ctl diagnose
+  frdm-imx95-m7-ctl uart-list
+  frdm-imx95-m7-ctl uart DEVICE [LOGFILE]
+
+The default firmware is:
+  frdm-imx95/frdm-imx95-m7-smoke.elf
+
+Mutating remoteproc commands must run as root. The remote processor is
+resolved by its device-tree compatible string, never by a remoteprocN index.
+EOF
+}
+
+resolve_m7() {
+  local candidate
+  local compatible
+  local match=""
+  local count=0
+
+  shopt -s nullglob
+  for candidate in "$remoteproc_class"/remoteproc*; do
+    [[ -r "$candidate/device/of_node/compatible" ]] || continue
+    while IFS= read -r compatible; do
+      if [[ "$compatible" == "$m7_compatible" ]]; then
+        match="$candidate"
+        count=$((count + 1))
+        break
+      fi
+    done < <(tr '\0' '\n' <"$candidate/device/of_node/compatible")
+  done
+
+  case "$count" in
+    0)
+      die "no remoteproc with compatible $m7_compatible; boot the optional M7 SD image"
+      ;;
+    1)
+      printf '%s\n' "$match"
+      ;;
+    *)
+      die "found $count remoteprocs with compatible $m7_compatible; refusing an ambiguous operation"
+      ;;
+  esac
+}
+
+require_root() {
+  [[ "$EUID" -eq 0 ]] || die "this operation writes remoteproc sysfs; rerun it as root"
+}
+
+read_attribute() {
+  local remoteproc="$1"
+  local attribute="$2"
+
+  [[ -r "$remoteproc/$attribute" ]] || die "missing remoteproc attribute: $attribute"
+  tr -d '\n' <"$remoteproc/$attribute"
+}
+
+wait_for_state() {
+  local remoteproc="$1"
+  local expected="$2"
+  local deadline=$((SECONDS + transition_timeout))
+  local actual
+
+  while ((SECONDS < deadline)); do
+    actual="$(read_attribute "$remoteproc" state)"
+    if [[ "$actual" == "$expected" ]]; then
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  actual="$(read_attribute "$remoteproc" state)"
+  die "timed out waiting for state $expected; current state is $actual"
+}
+
+validate_firmware() {
+  local firmware="$1"
+  local component
+
+  [[ "$firmware" != /* ]] || die "firmware must be a relative name"
+  [[ "$firmware" =~ ^[A-Za-z0-9._+/-]+$ ]] ||
+    die "firmware name contains unsupported characters"
+
+  IFS='/' read -r -a components <<<"$firmware"
+  for component in "${components[@]}"; do
+    [[ -n "$component" && "$component" != "." && "$component" != ".." ]] ||
+      die "firmware name contains an unsafe path component"
+  done
+
+  if [[ ! -r "/run/current-system/firmware/$firmware" &&
+    ! -r "/run/current-system/firmware/$firmware.zst" &&
+    ! -r "/run/current-system/firmware/$firmware.xz" &&
+    ! -r "/lib/firmware/$firmware" &&
+    ! -r "/lib/firmware/$firmware.zst" &&
+    ! -r "/lib/firmware/$firmware.xz" ]]; then
+    die "firmware is not present in the current system firmware closure: $firmware"
+  fi
+}
+
+show_status() {
+  local remoteproc
+  local node
+
+  remoteproc="$(resolve_m7)"
+  node="$(readlink -f "$remoteproc/device/of_node")"
+
+  printf 'remoteproc=%s\n' "$remoteproc"
+  printf 'device_tree_node=%s\n' "$node"
+  printf 'compatible=%s\n' "$m7_compatible"
+  printf 'name=%s\n' "$(read_attribute "$remoteproc" name)"
+  printf 'state=%s\n' "$(read_attribute "$remoteproc" state)"
+  printf 'firmware=%s\n' "$(read_attribute "$remoteproc" firmware)"
+  if [[ -r "$remoteproc/recovery" ]]; then
+    printf 'recovery=%s\n' "$(read_attribute "$remoteproc" recovery)"
+  fi
+}
+
+start_m7() {
+  local firmware="${1:-$default_firmware}"
+  local remoteproc
+  local state
+  local active_firmware
+
+  require_root
+  validate_firmware "$firmware"
+  remoteproc="$(resolve_m7)"
+  state="$(read_attribute "$remoteproc" state)"
+  active_firmware="$(read_attribute "$remoteproc" firmware)"
+
+  if [[ "$state" == "running" && "$active_firmware" == "$firmware" ]]; then
+    printf 'M7 is already running %s\n' "$firmware"
+    return 0
+  fi
+  [[ "$state" == "offline" ]] ||
+    die "M7 must be offline before start; current state is $state"
+
+  printf '%s' "$firmware" >"$remoteproc/firmware"
+  printf 'start' >"$remoteproc/state"
+  wait_for_state "$remoteproc" running
+  printf 'M7 started: %s\n' "$firmware"
+}
+
+stop_m7() {
+  local remoteproc
+  local state
+
+  require_root
+  remoteproc="$(resolve_m7)"
+  state="$(read_attribute "$remoteproc" state)"
+
+  if [[ "$state" == "offline" ]]; then
+    printf 'M7 is already offline\n'
+    return 0
+  fi
+  [[ "$state" == "running" || "$state" == "suspended" ]] ||
+    die "M7 cannot be cleanly stopped from state $state; use recover"
+
+  printf 'stop' >"$remoteproc/state"
+  wait_for_state "$remoteproc" offline
+  printf 'M7 stopped\n'
+}
+
+recover_m7() {
+  local firmware="${1:-$default_firmware}"
+  local remoteproc
+  local state
+
+  require_root
+  validate_firmware "$firmware"
+  remoteproc="$(resolve_m7)"
+  state="$(read_attribute "$remoteproc" state)"
+
+  case "$state" in
+    running | suspended)
+      stop_m7
+      ;;
+    crashed)
+      [[ -w "$remoteproc/recovery" ]] ||
+        die "M7 is crashed and the driver exposes no writable recovery attribute"
+      printf 'recover' >"$remoteproc/recovery"
+      wait_for_state "$remoteproc" running
+      stop_m7
+      ;;
+    offline)
+      ;;
+    *)
+      die "refusing recovery from unsupported state $state"
+      ;;
+  esac
+
+  start_m7 "$firmware"
+  printf 'M7 recovery complete\n'
+}
+
+cycle_m7() {
+  local count="${1:-3}"
+  local iteration
+
+  [[ "$count" =~ ^[1-9][0-9]*$ ]] || die "cycle count must be a positive integer"
+  ((count <= 100)) || die "cycle count is bounded at 100"
+
+  require_root
+  for ((iteration = 1; iteration <= count; iteration++)); do
+    printf 'cycle %d/%d: start\n' "$iteration" "$count"
+    start_m7 "$default_firmware"
+    printf 'cycle %d/%d: stop\n' "$iteration" "$count"
+    stop_m7
+  done
+  start_m7 "$default_firmware"
+  printf 'completed %d cycles; M7 left running for UART inspection\n' "$count"
+}
+
+diagnose() {
+  show_status
+  printf '\nA55 invariants\n'
+  printf 'kernel=%s\n' "$(uname -r)"
+  printf 'online_cpus=%s\n' "$(nproc)"
+  findmnt -n -o SOURCE,FSTYPE,TARGET / || true
+  findmnt -n -o SOURCE,FSTYPE,TARGET /boot || true
+  ip -brief link || true
+  systemctl --failed --no-legend || true
+  printf '\nRecent remoteproc and SCMI kernel messages\n'
+  journalctl -k -b --no-pager |
+    grep -Ei 'remoteproc|imx_rproc|scmi|system manager|m7' |
+    tail -n 100 || true
+}
+
+uart_list() {
+  local candidate
+  local found=0
+
+  shopt -s nullglob
+  for candidate in \
+    /dev/cu.wchusbserial* \
+    /dev/cu.usbserial* \
+    /dev/cu.CH34* \
+    /dev/serial/by-id/usb-wch.cn_USB_Quad_Serial_* \
+    /dev/serial/by-id/*CH34* \
+    /dev/ttyCH343USB*; do
+    printf '%s\n' "$candidate"
+    found=1
+  done
+
+  ((found == 1)) ||
+    die "no CH34x serial ports found; verify the FRDM J1 USB connection and host driver"
+}
+
+uart_capture() {
+  local device="${1:-}"
+  local logfile="${2:-frdm-imx95-m7-uart.log}"
+
+  [[ -n "$device" ]] || die "uart requires an explicit stable DEVICE path"
+  [[ -c "$device" ]] || die "UART device is not a character device: $device"
+
+  stty -F "$device" 115200 cs8 -cstopb -parenb raw -echo
+  printf 'capturing %s at 115200 8N1 to %s; press Ctrl-C to stop\n' \
+    "$device" "$logfile" >&2
+  tee "$logfile" <"$device"
+}
+
+command="${1:-}"
+if (($# > 0)); then
+  shift
+fi
+
+case "$command" in
+  status)
+    (($# == 0)) || die "status takes no arguments"
+    show_status
+    ;;
+  start)
+    (($# <= 1)) || die "start accepts at most one firmware name"
+    start_m7 "${1:-$default_firmware}"
+    ;;
+  stop)
+    (($# == 0)) || die "stop takes no arguments"
+    stop_m7
+    ;;
+  recover)
+    (($# <= 1)) || die "recover accepts at most one firmware name"
+    recover_m7 "${1:-$default_firmware}"
+    ;;
+  cycle)
+    (($# <= 1)) || die "cycle accepts at most one count"
+    cycle_m7 "${1:-3}"
+    ;;
+  diagnose)
+    (($# == 0)) || die "diagnose takes no arguments"
+    diagnose
+    ;;
+  uart-list)
+    (($# == 0)) || die "uart-list takes no arguments"
+    uart_list
+    ;;
+  uart)
+    (($# >= 1 && $# <= 2)) || die "uart requires DEVICE and accepts an optional LOGFILE"
+    uart_capture "$@"
+    ;;
+  help | --help | -h)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -1,9 +1,14 @@
-{...}: {
+{inputs, ...}: {
   flake.modules.nixos.frdm-imx95-m7-remoteproc = {
     config,
     lib,
+    pkgs,
     ...
-  }: {
+  }: let
+    system = pkgs.stdenv.hostPlatform.system;
+    m7Ctl = inputs.self.packages.${system}.frdm-imx95-m7-ctl;
+    m7SmokeFirmware = inputs.self.packages.${system}.frdm-imx95-m7-smoke;
+  in {
     hardware.deviceTree.overlays = [
       {
         name = "frdm-imx95-m7-remoteproc";
@@ -39,6 +44,9 @@
         '';
       }
     ];
+
+    hardware.firmware = [m7SmokeFirmware];
+    environment.systemPackages = [m7Ctl];
 
     assertions = [
       {
