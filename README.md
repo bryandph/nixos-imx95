@@ -105,8 +105,18 @@ application under `firmware/frdm-imx95-m7-smoke`, exposed as the
 ELF. NXP's release archive contains only a raw, licensed power-mode
 demonstration binary; its identity and the corresponding public BSD-3-Clause
 MCUXpresso source pointers are recorded in
-`packages/imx95-lf-6.18.20-2.0.0.nix`, but no NXP demo artifact enters this
-repository or its public build.
+`packages/imx95-lf-6.18.20-2.0.0.nix`. Operators can import the pinned member
+locally with `scripts/import-nxp-m7-power-mode-demo` and build
+`nxp-imx95-m7-power-mode-demo`. The unfree package is local-build preferred,
+substitute-disabled, absent from public checks, and installs the raw binary
+outside `lib/firmware` because Linux remoteproc requires ELF. No NXP demo
+artifact enters this repository or its public build.
+
+The Embassy demo executes M7-local wait-for-interrupt after every heartbeat,
+with SysTick as its bounded wake source. Linux/SRTM coordination, System
+Manager authorization, an A55 wake source, and recovery preconditions have
+not been validated, so the public firmware exposes no A55 power command and
+A55 control remains disabled.
 
 NixOS consumers should build
 `config.system.build.frdmImx95SdImage`, not the standard module's raw
@@ -250,6 +260,7 @@ NXP artifacts may be published.
     builtins.elem (lib.getName pkg) [
       "frdm-imx95-source-boot-container"
       "imx-boot-imx95"
+      "imx95"
       "lpddr4x_dmem_qb_v202409.bin"
       "lpddr4x_dmem_v202409.bin"
       "lpddr4x_imem_qb_v202409.bin"
@@ -261,6 +272,7 @@ NXP artifacts may be published.
       "nxp-imx95-lpddr4x-dmem-qb"
       "nxp-imx95-lpddr4x-imem"
       "nxp-imx95-lpddr4x-imem-qb"
+      "nxp-imx95-m7-power-mode-demo"
       "nixos-frdm-imx95-compatibility.img.zst"
       "nixos-frdm-imx95.img.zst"
       "nixos-frdm-imx95-source-built.img.zst"

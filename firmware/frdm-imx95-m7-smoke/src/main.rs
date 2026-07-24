@@ -11,9 +11,10 @@ use cortex_m_rt::exception;
 use embassy_executor::Spawner;
 use panic_halt as _;
 
-const BANNER: &[u8] = b"frdm-imx95-m7-smoke v0.1.0\r\n";
+const BANNER: &[u8] = b"frdm-imx95-m7-smoke v0.2.0\r\n";
 const HEARTBEAT: &[u8] = b"heartbeat architectural-tick=";
-const INPUT_IGNORED: &[u8] = b"input ignored; status-only demo\r\n";
+const STATUS: &[u8] = b"m7-local-idle=wfi; a55-power-control=disabled\r\n";
+const INPUT_IGNORED: &[u8] = b"input ignored; A55 power control disabled\r\n";
 
 #[repr(C, align(16))]
 struct ResourceTable {
@@ -50,6 +51,8 @@ async fn main(spawner: Spawner) {
     };
     let _ = write_all(&mut uart, BANNER);
     let _ = uart.flush();
+    let _ = write_all(&mut uart, STATUS);
+    let _ = uart.flush();
 
     let mut heartbeat = 0_u32;
     loop {
@@ -65,6 +68,7 @@ async fn main(spawner: Spawner) {
         }
 
         let _ = uart.flush();
+        cortex_m::asm::wfi();
     }
 }
 

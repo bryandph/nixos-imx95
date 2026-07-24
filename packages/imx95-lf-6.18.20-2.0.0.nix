@@ -187,13 +187,31 @@
         "embassy-executor"
         "lpuart3-output"
         "systick-heartbeat"
+        "m7-local-wfi"
       ];
       excludedUntilLifecycleValidation = [
-        "m7-low-power"
         "scmi-system-manager"
         "a55-suspend-wake"
         "rpmsg"
       ];
+      powerPolicy = {
+        m7LocalIdle = {
+          enabled = true;
+          mechanism = "cortex-m-wfi";
+          wakeSource = "systick";
+          affectsA55 = false;
+        };
+        a55SuspendWake = {
+          enabled = false;
+          rationale = "Linux/SRTM coordination and the System Manager wake contract are not validated";
+          requiredPreconditions = [
+            "linux-suspend-transaction"
+            "system-manager-lm1-authorization"
+            "a55-wake-source-armed"
+            "out-of-band-recovery"
+          ];
+        };
+      };
     };
   };
 

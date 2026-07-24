@@ -44,7 +44,7 @@ the M7. The complete observed mapping is:
 - `if00` carries the A55 Linux boot console and login;
 - `if02` carries early System Manager messages and its debug monitor;
 - `if04` is quiet until remoteproc starts, then prints
-  `frdm-imx95-m7-smoke v0.1.0`;
+  `frdm-imx95-m7-smoke v0.2.0`;
 - `if06` is the spare channel.
 
 Capture a selected port:
@@ -109,6 +109,22 @@ starts it again. Every transition has a 15-second timeout.
 For each cycle, retain the M7 UART log and the output of `diagnose`. Acceptance
 requires six online A55 CPUs, no failed systemd units, working SCMI and OP-TEE,
 working Ethernet/SSH, and unchanged eMMC recovery media.
+
+## M7-local idle and A55 power boundary
+
+The public demo reports
+`m7-local-idle=wfi; a55-power-control=disabled` at startup. After every
+heartbeat it executes Cortex-M wait-for-interrupt on the M7 only; the existing
+SysTick interrupt wakes it for the next iteration. Acceptance requires
+continued heartbeats, remoteproc state `running`, an unchanged A55 boot ID,
+and zero failed units.
+
+Any UART input byte receives a harmless status-only response. The NXP
+compatibility demo coordinates A55 power through System Manager and SRTM/RPMsg,
+but the public TCM-only workflow has not validated a Linux suspend transaction,
+LM1 authorization, an armed A55 wake source, or out-of-band recovery. The
+public firmware therefore exposes no A55 suspend command and sends no
+A55-affecting System Manager request.
 
 ## Failure and rollback
 

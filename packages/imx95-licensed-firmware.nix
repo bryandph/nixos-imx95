@@ -52,4 +52,6 @@ in {
     distribution = ddrDistribution;
     member = ddrMembers."lpddr4x_imem_qb_v202409.bin";
   };
+  m7PowerModeDemo =
+    callPackage ./nxp-imx95-m7-power-mode-demo.nix {};
 }

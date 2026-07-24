@@ -14,7 +14,9 @@
     "frdm-imx95-source-container-reproducibility"
     "frdm-imx95-source-container-structure"
     "frdm-imx95-source-sd-image-layout"
+    "frdm-imx95-m7-compatibility-provider-evaluation"
     "imx-boot-imx95"
+    "imx95"
     "lpddr4x_dmem_qb_v202409.bin"
     "lpddr4x_dmem_v202409.bin"
     "lpddr4x_imem_qb_v202409.bin"
@@ -26,6 +28,7 @@
     "nxp-imx95-lpddr4x-dmem-qb"
     "nxp-imx95-lpddr4x-imem"
     "nxp-imx95-lpddr4x-imem-qb"
+    "nxp-imx95-m7-power-mode-demo"
     "nixos-frdm-imx95-compatibility.img.zst"
     "nixos-frdm-imx95-m7-remoteproc.img.zst"
     "nixos-frdm-imx95.img.zst"
@@ -137,6 +140,7 @@ in {
         oei = pkgs.callPackage ../packages/imx-oei-imx95-frdm.nix {};
         imxMkimage = pkgs.callPackage ../packages/imx-mkimage-imx95.nix {};
         licensedFirmware = pkgs.callPackage ../packages/imx95-licensed-firmware.nix {};
+        m7CompatibilityFirmware = licensedFirmware.m7PowerModeDemo;
         rustToolchain = let
           fenix = inputs.fenix.packages.${system};
           native = fenix.toolchainOf {
@@ -236,6 +240,7 @@ in {
           nxp-imx95-lpddr4x-dmem-qb = licensedFirmware.lpddr4xDmemQuickBoot;
           nxp-imx95-lpddr4x-imem = licensedFirmware.lpddr4xImem;
           nxp-imx95-lpddr4x-imem-qb = licensedFirmware.lpddr4xImemQuickBoot;
+          nxp-imx95-m7-power-mode-demo = m7CompatibilityFirmware;
           uboot-imx95-frdm = uboot;
           default = sdImage;
         };
@@ -305,9 +310,9 @@ in {
               jq -e '
                 .firmware.license == "MIT" and
                 .bsp.license == "MIT OR Apache-2.0" and
-                .bsp.rev == "6f993f961a58e58a7c97e908890211779956cdce" and
+                .bsp.rev == "2ecc166a18c4a00853a5a316bbcba6d91147bc85" and
                 .bsp.archiveHash ==
-                  "sha256-icvK805iM4jeDhTA/vkIDOyFpzLsAbYA+BKXEIt97iY=" and
+                  "sha256-fl+KSl4YpCxDl4W0hZ6v6NXSaDrBL7dRO7nQfggf1wI=" and
                 .rust.target == "thumbv7em-none-eabihf" and
                 .rust.toolchain == "1.85.1"
               ' "$provenance" >/dev/null
@@ -322,7 +327,59 @@ in {
                 find ${m7SmokeFirmware} -type f \
                   \( -name '*.bin' -o -name '*.img' -o -name '*.fw' \)
               )"
+              strings "$elf" | grep -q 'm7-local-idle=wfi'
+              strings "$elf" | grep -q 'a55-power-control=disabled'
+              test ${
+                if release.m7.publicDemo.powerPolicy.m7LocalIdle.enabled
+                then "1"
+                else "0"
+              } = 1
+              test ${
+                if release.m7.publicDemo.powerPolicy.a55SuspendWake.enabled
+                then "0"
+                else "1"
+              } = 1
 
+              touch "$out"
+            '';
+
+          m7-compatibility-provider-evaluation =
+            pkgs.runCommand "frdm-imx95-m7-compatibility-provider-evaluation" {
+              allowSubstitutes = false;
+              preferLocalBuild = true;
+              meta = {
+                license = m7CompatibilityFirmware.providerLicense;
+                hydraPlatforms = [];
+              };
+            } ''
+              test ${lib.escapeShellArg m7CompatibilityFirmware.fileName} = \
+                imx95-15x15-frdm_m7_TCM_power_mode_switch.bin
+              test ${lib.escapeShellArg m7CompatibilityFirmware.firmwareFormat} = \
+                raw-binary
+              test ${toString m7CompatibilityFirmware.expectedSize} -eq 35916
+              test ${lib.escapeShellArg m7CompatibilityFirmware.expectedSha256} = \
+                15141ba5c66504131b45c5daf29f2cf1a75273cff8f18f0cc205aa3a4d57cdb9
+              test ${
+                if m7CompatibilityFirmware.remoteprocLoadable
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if m7CompatibilityFirmware.allowSubstitutes
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if m7CompatibilityFirmware.preferLocalBuild
+                then "1"
+                else "0"
+              } = 1
+              test ${
+                if m7CompatibilityFirmware.meta.license.redistributable
+                then "0"
+                else "1"
+              } = 1
+              test ${toString (builtins.length m7CompatibilityFirmware.meta.hydraPlatforms)} -eq 0
               touch "$out"
             '';
 

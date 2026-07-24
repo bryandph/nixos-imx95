@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+distribution_name="LF_v6.18.20-2.0.0_images_IMX95EVK.zip"
+distribution_sha256="76149ba07ae8a42e32a52a461f21d90c88ef44f1a6f79de7b7afe85536a1e903"
+distribution_size="4779306360"
+member_path="imx_mcore_demos/imx95-15x15-frdm_m7_TCM_power_mode_switch.bin"
+member_name="imx95-15x15-frdm_m7_TCM_power_mode_switch.bin"
+member_sha256="15141ba5c66504131b45c5daf29f2cf1a75273cff8f18f0cc205aa3a4d57cdb9"
+member_size="35916"
+
+usage() {
+  echo "usage: $0 --accept-license /path/to/$distribution_name" >&2
+}
+
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+verify_file() {
+  local path=$1
+  local expected_hash=$2
+  local expected_size=$3
+  local label=$4
+  local actual_hash
+  local actual_size
+
+  if [ ! -f "$path" ]; then
+    echo "$label not found: $path" >&2
+    exit 1
+  fi
+
+  actual_size=$(wc -c <"$path" | tr -d ' ')
+  if [ "$actual_size" != "$expected_size" ]; then
+    echo "$label size mismatch" >&2
+    echo "expected: $expected_size" >&2
+    echo "actual:   $actual_size" >&2
+    exit 1
+  fi
+
+  actual_hash=$(hash_file "$path")
+  if [ "$actual_hash" != "$expected_hash" ]; then
+    echo "$label hash mismatch" >&2
+    echo "expected: $expected_hash" >&2
+    echo "actual:   $actual_hash" >&2
+    exit 1
+  fi
+}
+
+if [ "$#" -ne 2 ] || [ "$1" != "--accept-license" ]; then
+  usage
+  exit 2
+fi
+
+for command_name in awk nix-store unzip; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "required command not found: $command_name" >&2
+    exit 1
+  fi
+done
+
+distribution=$2
+verify_file \
+  "$distribution" \
+  "$distribution_sha256" \
+  "$distribution_size" \
+  "$distribution_name"
+
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/nixos-imx95-m7-demo.XXXXXX")
+trap 'rm -rf -- "$tmp_dir"' EXIT
+member_file="$tmp_dir/$member_name"
+
+unzip -p "$distribution" "$member_path" >"$member_file"
+verify_file "$member_file" "$member_sha256" "$member_size" "$member_name"
+
+store_path=$(nix-store --add-fixed sha256 "$member_file")
+echo "Imported $member_name as $store_path"
+echo "Do not publish this store path or upload dependent outputs to a public cache."

@@ -43,7 +43,7 @@
     inherit bsp;
     firmware = {
       name = "frdm-imx95-m7-smoke";
-      version = "0.1.0";
+      version = "0.2.0";
       license = "MIT";
     };
     release = release.release.version;
@@ -55,7 +55,7 @@
 in
   rustPlatform.buildRustPackage {
     pname = "frdm-imx95-m7-smoke";
-    version = "0.1.0";
+    version = "0.2.0";
 
     src = source;
 
