@@ -384,7 +384,9 @@ in {
             test ${lib.escapeShellArg m7SourceBootContainer.providerKind} = \
               source-assembled
             test ${lib.escapeShellArg m7SourceBootContainer.systemManagerConfig} = \
-              other/mx95evkrpmsg
+              mx95evk
+            test ${lib.escapeShellArg m7SourceBootContainer.systemManagerPolicy} = \
+              m7-remoteproc-lmm
             test ${lib.escapeShellArg m7SourceBootContainer.fileName} = \
               imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55-m7-remoteproc
             test ${
@@ -393,9 +395,13 @@ in {
               else "1"
             } = 1
             test ${lib.escapeShellArg m7Board.config.hardware.nxp.imx95.bootContainer.systemManagerConfig} = \
-              other/mx95evkrpmsg
+              mx95evk
+            test ${lib.escapeShellArg m7Board.config.hardware.nxp.imx95.bootContainer.systemManagerPolicy} = \
+              m7-remoteproc-lmm
             test ${lib.escapeShellArg board.config.hardware.nxp.imx95.bootContainer.systemManagerConfig} = \
               mx95evk
+            test ${lib.escapeShellArg board.config.hardware.nxp.imx95.bootContainer.systemManagerPolicy} = \
+              default
             touch "$out"
           '';
 

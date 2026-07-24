@@ -1,0 +1,14 @@
+diff --git a/configs/mx95evk.cfg b/configs/mx95evk.cfg
+index a9f09f8..751fd51 100644
+--- a/configs/mx95evk.cfg
++++ b/configs/mx95evk.cfg
+@@ -594,7 +594,8 @@ CLOCK_USBPHYBURUNIN       ALL
+ CLOCK_VPUDSP              ALL
+ HSIO_PLL                  ALL
+ LDB_PLL                   ALL
+-LMM_1                     NOTIFY
++LMM_1                     ALL
++PD_M7                     ALL
+ PERF_A55                  ALL
+ RTC                       ALL, test
+ SENSOR_TEMP_A55           ALL

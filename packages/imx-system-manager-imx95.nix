@@ -5,6 +5,7 @@
   perl,
   stdenvNoCC,
   systemManagerConfig ? null,
+  remoteprocMode ? false,
 }: let
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
   component = release.sources.systemManager;
@@ -19,6 +20,7 @@ in
     inherit (component) pname version;
 
     src = fetchFromGitHub component.fetchFromGitHub;
+    patches = lib.optionals remoteprocMode [./imx-system-manager-imx95-m7-remoteproc.patch];
     strictDeps = true;
     nativeBuildInputs = [
       armToolchain
@@ -66,7 +68,7 @@ in
     '';
 
     passthru = {
-      inherit release;
+      inherit release remoteprocMode;
       systemManagerConfig = resolvedSystemManagerConfig;
       artifacts.systemManager = release.machine.systemManagerImage;
       provenance = {

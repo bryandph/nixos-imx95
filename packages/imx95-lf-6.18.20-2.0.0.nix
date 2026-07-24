@@ -107,9 +107,10 @@
       };
       compatible = "fsl,imx95-cm7";
       bootContainer = {
-        systemManagerConfig = "other/mx95evkrpmsg";
-        expectedSha256 = "f0ee5f7260389d356e29db2d10f20ddf1d3ca0d55997b99babec2e6a969d4a59";
-        expectedSize = 2995200;
+        systemManagerConfig = "mx95evk";
+        systemManagerPolicy = "m7-remoteproc-lmm";
+        expectedSha256 = "3edd7709521907d96d6b0dc91e401d79027738e96f3e7a0802563c5c206d0081";
+        expectedSize = 2997248;
         fileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55-m7-remoteproc";
       };
       firmwareFormat = "elf32-littlearm";

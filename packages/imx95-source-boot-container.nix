@@ -18,6 +18,7 @@
     then release.m7.remoteproc.bootContainer
     else {
       systemManagerConfig = release.machine.systemManagerConfig;
+      systemManagerPolicy = "default";
       expectedSha256 = release.machine.bootContainerExpectedSha256;
       expectedSize = release.machine.bootContainerExpectedSize;
       fileName = release.machine.bootContainerFileName;
@@ -36,6 +37,7 @@
   optee = callPackage ./imx-optee-os-imx95.nix {};
   systemManager = callPackage ./imx-system-manager-imx95.nix {
     systemManagerConfig = bootContainerConfig.systemManagerConfig;
+    inherit remoteprocMode;
   };
   oei = callPackage ./imx-oei-imx95-frdm.nix {};
   imxMkimage = callPackage ./imx-mkimage-imx95.nix {};
@@ -105,6 +107,7 @@ in
       expectedSize = bootContainerConfig.expectedSize;
       fileName = bootContainerConfig.fileName;
       systemManagerConfig = bootContainerConfig.systemManagerConfig;
+      systemManagerPolicy = bootContainerConfig.systemManagerPolicy;
       providerKind = "source-assembled";
       providerLicense = nxpLicense;
       release = release.release.version;
