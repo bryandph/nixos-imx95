@@ -14,7 +14,7 @@ const BANNER: &[u8] = b"frdm-imx95-m7-smoke v0.1.0\r\n";
 const HEARTBEAT: &[u8] = b"heartbeat architectural-tick=";
 const INPUT_IGNORED: &[u8] = b"input ignored; status-only demo\r\n";
 
-#[repr(C, align(4))]
+#[repr(C, align(16))]
 struct ResourceTable {
     version: u32,
     entries: u32,

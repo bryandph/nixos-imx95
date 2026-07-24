@@ -295,7 +295,12 @@ in {
                 readelf --wide --sections "$elf" |
                   awk '$3 == ".resource_table" { print $7 }'
               )
+              resource_address=$(
+                readelf --wide --sections "$elf" |
+                  awk '$3 == ".resource_table" { print $5 }'
+              )
               test "$resource_size" = 000010
+              test $((0x$resource_address % 16)) -eq 0
 
               jq -e '
                 .firmware.license == "MIT" and

@@ -4,7 +4,7 @@
  */
 SECTIONS
 {
-  .resource_table : ALIGN(4)
+  .resource_table : ALIGN(16)
   {
     KEEP(*(.resource_table));
   } > FLASH
