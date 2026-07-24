@@ -8,6 +8,7 @@
       inherit system;
       config.allowUnfreePredicate = pkg:
         builtins.elem (lib.getName pkg) [
+          "eiq-neutron-sdk"
           "frdm-imx95-source-boot-container"
           "frdm-imx95-source-container-reproducibility"
           "frdm-imx95-source-container-structure"
@@ -15,6 +16,8 @@
           "frdm-imx95-m7-compatibility-provider-evaluation"
           "imx-boot-imx95"
           "imx95"
+          "imx95-neutron-converted-model"
+          "imx95-neutron-runtime"
           "lpddr4x_dmem_qb_v202409.bin"
           "lpddr4x_dmem_v202409.bin"
           "lpddr4x_imem_qb_v202409.bin"
@@ -31,6 +34,7 @@
           "nixos-frdm-imx95-m7-remoteproc.img.zst"
           "nixos-frdm-imx95.img.zst"
           "nixos-frdm-imx95-source-built.img.zst"
+          "tflite-neutron-delegate-imx95"
         ];
     });
   };

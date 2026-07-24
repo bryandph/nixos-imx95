@@ -215,6 +215,202 @@
     };
   };
 
+  neutron = {
+    identityPolicy = {
+      authority = "immutable revisions, Git blob identities, and published SHA-256 values";
+      versionLabelsAreInformational = true;
+      rationale = ''
+        The release recipe calls the runtime 3.1.1 while the selected repository
+        SBOM and matching machine-learning guide call the same stack 3.1.2.
+        The pinned repository revision and member identities are authoritative;
+        no package may infer content from either display version.
+      '';
+    };
+
+    versionLabels = {
+      recipe = "3.1.1";
+      guide = "3.1.2";
+      sbom = "3.1.2";
+      selectedConverter = "3.1.2";
+    };
+
+    kernel = {
+      nxpReference = {
+        repository = "https://github.com/nxp-imx/linux-imx";
+        branch = "lf-6.18.20-2.0.0";
+        rev = "b096ce610e956cc2596006343df8a2a26ed6e019";
+        fetchFromGitHub = {
+          owner = "nxp-imx";
+          repo = "linux-imx";
+          rev = "b096ce610e956cc2596006343df8a2a26ed6e019";
+          sha256 = "sha256-Dz+kh5GtUtBCocBTvkXN4Ql7p1ZjX+DVvChIRoYj6/w=";
+        };
+        license = lib.licenses.gpl2Only;
+      };
+      upstreamComparison = {
+        repository = "https://github.com/torvalds/linux";
+        tag = "v7.1";
+        rev = "8cd9520d35a6c38db6567e97dd93b1f11f185dc6";
+        boardDtsPath = "arch/arm64/boot/dts/freescale/imx95-15x15-frdm.dts";
+      };
+      delta = import ./imx95-neutron-kernel-delta.nix;
+    };
+
+    runtime = {
+      repository = "https://github.com/nxp-imx/neutron";
+      branch = "lf-6.18.20_2.0.0";
+      rev = "d0ff138390aeba2b6c5169d8f0ca13f6a6b8219a";
+      recipe = {
+        path = "meta-imx-ml/recipes-libraries/neutron/neutron_3.1.1.bb";
+        blobSha1 = "7f9f6100cedd5070832d098f95db35149a6ae909";
+      };
+      license = {
+        name = "NXP Software License Agreement";
+        free = false;
+        redistributable = false;
+        file = {
+          path = "LICENSE.txt";
+          blobSha1 = "37ddcbd5e3d163b6a5fe52fb0384d6b807c5dc64";
+          size = 52051;
+        };
+        contentRegister = {
+          path = "SW-Content-Register.txt";
+          blobSha1 = "c76c4018ed8dac88efca1c72a7ee5bf9d83908bb";
+          size = 2236;
+        };
+        conditionalDistribution = "Section 2.3 applies only to an authorized NXP-based system";
+      };
+      sbom = {
+        path = "SBOM.spdx.json";
+        blobSha1 = "29156bcde3cc7f1a4e433a13ea6cef7b667f514c";
+        size = 135878;
+      };
+      members = {
+        firmware = {
+          path = "imx95/firmware/NeutronFirmware.elf";
+          blobSha1 = "6696976e423992993313a8aa0c58c9d11c598cc7";
+          size = 46388;
+        };
+        driver = {
+          path = "imx95/library/libNeutronDriver.so";
+          blobSha1 = "d21dfed5315033aec572ca4ce251be42f4aca65f";
+          size = 68496;
+        };
+        headers = [
+          {
+            path = "imx95/include/NeutronDriver.h";
+            blobSha1 = "36f295bc054245efd4f9815646be06e24fe11680";
+            size = 8880;
+          }
+          {
+            path = "imx95/include/NeutronErrors.h";
+            blobSha1 = "20239555722192d8b0d760e948c111b33f9ff653";
+            size = 2693;
+          }
+        ];
+      };
+    };
+
+    tensorflowLite = {
+      version = "2.19.0";
+      repository = "https://github.com/nxp-imx/tensorflow-imx";
+      branch = "lf-6.18.20_2.0.0";
+      rev = "41cd35bea009fa11a7bceecfa1a9dcf3f9255628";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "tensorflow-imx";
+        rev = "41cd35bea009fa11a7bceecfa1a9dcf3f9255628";
+        sha256 = "188830dsgdshgd91d9qk4j0jwqnsc8ym2ask8nkb6zfl2fk940sl";
+      };
+      license = lib.licenses.asl20;
+      licenseFile = {
+        path = "LICENSE";
+        blobSha1 = "12d255f8e0f049d3c3127e71788e219b86cdf55b";
+      };
+      sbom = {
+        path = "SBOM.spdx.json";
+        blobSha1 = "d8d7639ca2e2ae1e2e162c2c79581f12ee096e94";
+      };
+      recipe = {
+        path = "meta-imx-ml/recipes-libraries/tensorflow-lite/tensorflow-lite-2.19.0.inc";
+        blobSha1 = "c7870cafacd8b06085e0f533a50add69ba859bdb";
+      };
+    };
+
+    delegate = {
+      version = "2.19.0";
+      repository = "https://github.com/nxp-imx/tflite-neutron-delegate";
+      branch = "lf-6.18.20_2.0.0";
+      rev = "4a38248c74b83b0b7f4f2a9091e095e1e92247d0";
+      fetchFromGitHub = {
+        owner = "nxp-imx";
+        repo = "tflite-neutron-delegate";
+        rev = "4a38248c74b83b0b7f4f2a9091e095e1e92247d0";
+        sha256 = "1c2hmsjpqvkn9faqmn2ln356pfcn0l2zhkxk3v3cgdsczmx34jbn";
+      };
+      license = lib.licenses.asl20;
+      licenseFile = {
+        path = "LICENSE.txt";
+        blobSha1 = "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64";
+      };
+      sbom = {
+        path = "SBOM.spdx.json";
+        blobSha1 = "9ffbaf090de879b8782ea36e1146e4a93dc227e5";
+      };
+      recipe = {
+        path = "meta-imx-ml/recipes-libraries/tensorflow-lite/tensorflow-lite-neutron-delegate_2.19.0.bbappend";
+        blobSha1 = "ea43a7615a3eba2efa202ad015bb048c2cb5d50f";
+      };
+    };
+
+    converter = {
+      package = "eiq-neutron-sdk";
+      version = "3.1.2";
+      pythonAbi = "cp311-cp311";
+      platform = "manylinux_2_31_x86_64";
+      index = "https://eiq.nxp.com/repository/eiq-neutron-sdk/";
+      file = "eiq_neutron_sdk-3.1.2-cp311-cp311-manylinux_2_31_x86_64.whl";
+      sha256 = "adf64e34d116292038321dd14a7e38153a191f915850de6a14337304293878fe";
+      metadataSha256 = "4f364ee3f5d5fd382fd6168551c026b1c2e2e756215406816e8c36431c78d8ab";
+      licenseReview = {
+        reviewedOn = "2026-07-24";
+        status = "no-affirmative-redistribution-authority";
+        authorities = [
+          "https://www.nxp.com/design/design-center/software/eiq-ai-development-environment/eiq-toolkit-for-end-to-end-model-development-and-deployment:EIQ-TOOLKIT"
+          "https://eiq.nxp.com/learning-hub/tools/neutronSdk/softwareTools/NeutronConverter.html"
+        ];
+        rationale = ''
+          NXP publishes the matched SDK as an account/license-acceptance
+          download and documents how the converter embeds target-specific
+          kernels into i.MX95 NeutronGraph containers. Neither reviewed
+          authority grants redistribution rights for the tool or generated
+          target payload. The wheel and every converted model therefore remain
+          operator-supplied pending an affirmative grant.
+        '';
+      };
+      convertedOutputRedistribution = "unresolved-operator-input";
+    };
+
+    model = {
+      name = "mobilenet_v1_1.0_224_quant";
+      sourceArchive = {
+        url = "https://storage.googleapis.com/download.tensorflow.org/models/mobilenet_v1_2018_08_02/mobilenet_v1_1.0_224_quant.tgz";
+        sha256 = "0rj1fj8zcm9507rwxkg4vwk75kvi1ihb06i8ssr3dabkhv93496k";
+        member = "mobilenet_v1_1.0_224_quant.tflite";
+        memberSha256 = "ecc3a67c47c5a609ec35f6a58a7d97532834e43df4cb7d3f1204a8164b7d20dd";
+        license = lib.licenses.asl20;
+        licenseAuthority = "https://github.com/tensorflow/models";
+      };
+      converted = {
+        target = "imx95";
+        forceDeterminism = true;
+        distribution = "operator-supplied-until-license-review";
+        sha256 = "946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba";
+        identity = "sha256:946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba";
+      };
+    };
+  };
+
   sources = {
     uboot = {
       pname = "uboot-imx95-frdm";

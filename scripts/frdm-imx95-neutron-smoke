@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: set the variables below, then run:
+  frdm-imx95-neutron-smoke [--cpu-only] [--require-char-device]
+
+Required:
+  NEUTRON_BENCHMARK      benchmark_model executable
+  NEUTRON_CPU_MODEL      original quantized TFLite model
+  NEUTRON_REPORT         JSON report destination
+
+Also required for accelerator acceptance:
+  NEUTRON_DELEGATE       libneutron_delegate.so
+  NEUTRON_MODEL          converted TFLite model
+  NEUTRON_DEVICE         Neutron character device
+  NEUTRON_FIRMWARE       NeutronFirmware.elf
+  NEUTRON_PERF_COUNTERS  debugfs perf_counters file
+EOF
+}
+
+cpu_only=false
+require_char_device=false
+for argument in "$@"; do
+  case "$argument" in
+    --cpu-only)
+      cpu_only=true
+      ;;
+    --require-char-device)
+      require_char_device=true
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+: "${NEUTRON_BENCHMARK:?NEUTRON_BENCHMARK is required}"
+: "${NEUTRON_CPU_MODEL:?NEUTRON_CPU_MODEL is required}"
+: "${NEUTRON_REPORT:?NEUTRON_REPORT is required}"
+
+test -x "$NEUTRON_BENCHMARK"
+test -f "$NEUTRON_CPU_MODEL"
+
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/frdm-imx95-neutron-smoke.XXXXXX")
+trap 'rm -rf -- "$work_dir"' EXIT
+input_file="$work_dir/input.bin"
+cpu_output="$work_dir/cpu-output.bin"
+truncate -s 150528 "$input_file"
+
+common_args=(
+  "--input_layer=input"
+  "--input_layer_shape=1,224,224,3"
+  "--input_layer_value_files=input:$input_file"
+  "--max_secs=10"
+  "--num_runs=1"
+  "--warmup_runs=1"
+)
+
+timeout 30 "$NEUTRON_BENCHMARK" \
+  "--graph=$NEUTRON_CPU_MODEL" \
+  "--output_filepath=$cpu_output" \
+  "${common_args[@]}" >"$work_dir/cpu.log" 2>&1
+test -s "$cpu_output"
+
+if "$cpu_only"; then
+  jq -n \
+    --arg benchmarkSha256 "$(sha256sum "$NEUTRON_BENCHMARK" | cut -d' ' -f1)" \
+    --arg modelSha256 "$(sha256sum "$NEUTRON_CPU_MODEL" | cut -d' ' -f1)" \
+    '{
+      accelerated: false,
+      acceptance: false,
+      control: "cpu-only",
+      identities: {
+        benchmarkSha256: $benchmarkSha256,
+        modelSha256: $modelSha256
+      }
+    }' >"$NEUTRON_REPORT"
+  exit 0
+fi
+
+if [[ "$EUID" -eq 0 ]]; then
+  echo "Accelerator smoke must run as a non-root user" >&2
+  exit 1
+fi
+
+: "${NEUTRON_DELEGATE:?NEUTRON_DELEGATE is required}"
+: "${NEUTRON_MODEL:?NEUTRON_MODEL is required}"
+: "${NEUTRON_DEVICE:?NEUTRON_DEVICE is required}"
+: "${NEUTRON_FIRMWARE:?NEUTRON_FIRMWARE is required}"
+: "${NEUTRON_PERF_COUNTERS:?NEUTRON_PERF_COUNTERS is required}"
+
+test -f "$NEUTRON_DELEGATE"
+test -f "$NEUTRON_MODEL"
+test -f "$NEUTRON_FIRMWARE"
+test -r "$NEUTRON_PERF_COUNTERS"
+test -r "$NEUTRON_DEVICE"
+test -w "$NEUTRON_DEVICE"
+if "$require_char_device"; then
+  test -c "$NEUTRON_DEVICE"
+fi
+
+before_counters=$(<"$NEUTRON_PERF_COUNTERS")
+delegate_output="$work_dir/delegate-output.bin"
+profile_output="$work_dir/delegate-profile.csv"
+timeout 30 "$NEUTRON_BENCHMARK" \
+  "--graph=$NEUTRON_MODEL" \
+  "--external_delegate_path=$NEUTRON_DELEGATE" \
+  "--enable_op_profiling=true" \
+  "--op_profiling_output_mode=csv" \
+  "--op_profiling_output_file=$profile_output" \
+  "--output_filepath=$delegate_output" \
+  "${common_args[@]}" >"$work_dir/delegate.log" 2>&1
+test -s "$delegate_output"
+test -s "$profile_output"
+
+delegated_nodes=$(
+  grep -Eo '[0-9]+ nodes delegated out of' "$work_dir/delegate.log" |
+    tail -n 1 |
+    cut -d' ' -f1
+)
+if [[ -z "$delegated_nodes" || "$delegated_nodes" -le 0 ]]; then
+  echo "No delegated-node evidence was reported" >&2
+  exit 1
+fi
+
+python3 - "$cpu_output" "$delegate_output" <<'PY'
+import pathlib
+import sys
+
+cpu = pathlib.Path(sys.argv[1]).read_bytes()
+delegate = pathlib.Path(sys.argv[2]).read_bytes()
+if len(cpu) != len(delegate):
+    raise SystemExit("CPU and delegate output sizes differ")
+max_error = max((abs(a - b) for a, b in zip(cpu, delegate)), default=0)
+if max_error > 1:
+    raise SystemExit(f"delegate output exceeds byte tolerance: {max_error} > 1")
+PY
+
+after_counters=$(<"$NEUTRON_PERF_COUNTERS")
+if [[ "$before_counters" == "$after_counters" ]]; then
+  echo "Neutron performance counters did not move" >&2
+  exit 1
+fi
+
+jq -n \
+  --arg benchmarkSha256 "$(sha256sum "$NEUTRON_BENCHMARK" | cut -d' ' -f1)" \
+  --arg delegateSha256 "$(sha256sum "$NEUTRON_DELEGATE" | cut -d' ' -f1)" \
+  --arg firmwareSha256 "$(sha256sum "$NEUTRON_FIRMWARE" | cut -d' ' -f1)" \
+  --arg modelSha256 "$(sha256sum "$NEUTRON_MODEL" | cut -d' ' -f1)" \
+  --argjson delegatedNodes "$delegated_nodes" \
+  '{
+    accelerated: true,
+    acceptance: true,
+    control: null,
+    delegatedNodes: $delegatedNodes,
+    outputToleranceBytes: 1,
+    independentActivity: "debugfs-perf-counters-moved",
+    identities: {
+      benchmarkSha256: $benchmarkSha256,
+      delegateSha256: $delegateSha256,
+      firmwareSha256: $firmwareSha256,
+      modelSha256: $modelSha256
+    }
+  }' >"$NEUTRON_REPORT"

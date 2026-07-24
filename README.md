@@ -92,6 +92,142 @@ recovery. The checks parse the source-built AHAB inventory, reject
 missing/corrupt/unsafe inputs, compare two clean assemblies byte-for-byte, and
 verify both providers' exact bytes at the raw SD offset.
 
+## Optional Neutron NPU evaluation
+
+The exported `frdm-imx95-neutron-npu` module is an evaluation role, not part of
+the default FRDM core or image. It selects the evidence-approved Neutron kernel
+provider and reviewed device tree, then adds the locally imported runtime,
+operator-supplied converted model, least-privilege device access, and bounded
+smoke interface. The accepted boot container is unchanged.
+
+Treat `packages/imx95-lf-6.18.20-2.0.0.nix` as the authority for source
+pointers, immutable identities, member paths, license authorities, and the
+release-label reconciliation. Do not copy proprietary runtime, converter, or
+converted-model bytes into this checkout or a public cache.
+
+### Import the runtime and convert the smoke model
+
+After reviewing the licenses referenced by the release mapping, check out the
+pinned Neutron source locally and import only the selected members:
+
+```console
+nix run --impure .#import-imx95-neutron-runtime -- \
+  --accept-license /path/to/pinned-neutron-checkout
+```
+
+The command verifies the license, content register, SBOM, firmware, userspace
+library, and required headers before adding only the runtime members to the
+local Nix store. Retain the reported store path; it is the
+`hardware.nxp.imx95.neutron.runtimeRoot` value.
+
+Model conversion runs as an `x86_64-linux` derivation, so Nix can schedule it
+on a compatible remote builder even when the initiating host is macOS. Point
+the impure evaluation at the exact operator-downloaded Python 3.11 wheel:
+
+```console
+export NIXOS_IMX95_NEUTRON_CONVERTER_WHEEL=\
+/path/to/eiq_neutron_sdk-3.1.2-cp311-cp311-manylinux_2_31_x86_64.whl
+converted_root="$(
+  nix build --impure -j 1 --no-link --print-out-paths \
+    .#packages.x86_64-linux.imx95-neutron-converted-model
+)"
+converted_model="$converted_root/share/imx95-neutron/\
+mobilenet_v1_1.0_224_quant-neutron.tflite"
+```
+
+The derivation verifies the wheel and source-model identities, runs two
+conversions with `--force-determinism`, rejects differing results, and asserts
+the converted identity pinned in the release mapping. Keep the resulting path
+local unless affirmative redistribution authority is established.
+
+Compose the module only in a dedicated evaluation configuration:
+
+```nix
+{
+  imports = [
+    inputs.nixos-imx95.nixosModules.frdm-imx95-core
+    inputs.nixos-imx95.nixosModules.frdm-imx95-sd-image
+    inputs.nixos-imx95.nixosModules.frdm-imx95-neutron-npu
+  ];
+
+  hardware.nxp.imx95.neutron = {
+    runtimeRoot = /nix/store/operator-imported-runtime;
+    convertedModel = /nix/store/operator-imported-model;
+    convertedModelSha256 = "<reviewed-two-pass-sha256>";
+  };
+
+  users.users.<operator>.extraGroups = ["neutron"];
+}
+```
+
+The paths and hash above are placeholders, not publishable configuration.
+Aggregate systems and images inherit the unfree, non-redistributable,
+local-build-preferred, substitute-disabled, and Hydra-disabled policy.
+
+### Capture and accept the evaluation
+
+Expose the two accepted local store paths and the reviewed two-pass model hash
+to the impure fixture evaluation, then build its dedicated image:
+
+```console
+export NIXOS_IMX95_NEUTRON_RUNTIME_ROOT=/nix/store/operator-imported-runtime
+export NIXOS_IMX95_NEUTRON_CONVERTED_MODEL="$converted_model"
+export NIXOS_IMX95_NEUTRON_CONVERTED_MODEL_SHA256=\
+946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba
+nix build --impure -j 1 \
+  .#packages.aarch64-linux.frdm-imx95-neutron-npu-sd-image
+```
+
+All three variables are required together. When any is absent, the
+`frdm-imx95-neutron-npu` configuration and image output are intentionally
+absent from the public/default flake surface.
+
+Identify the removable target independently with `findmnt`, `lsblk`, and the
+MMC sysfs device type; never infer it from a previous `mmcblk` number. Write
+only that unmounted SD medium. Retain the accepted SD/eMMC baseline and do not
+write either eMMC hardware boot partition.
+
+Capture both the A55 console (`ttyLP0`) and the M33/System Manager UART from
+power-on. After a cold boot, collect at least:
+
+```console
+uname -a
+nproc
+cat /sys/devices/system/cpu/online
+findmnt /
+findmnt /boot
+systemctl --failed
+journalctl -b -k
+ls -l /dev/neutron0
+```
+
+Verify six online A55 CPUs, the expected memory delta from the reusable Neutron
+DMA pool, SCMI, OP-TEE, Ethernet/SSH, root and boot-medium identity, the
+selected kernel/device tree, firmware loading, and no unexpected failed units.
+
+Run the negative control and accelerator proof as the authorized non-root
+operator:
+
+```console
+frdm-imx95-neutron-smoke --cpu-only
+frdm-imx95-neutron-smoke
+```
+
+The CPU run must explicitly report non-acceptance. The Neutron run is accepted
+only when its JSON report records output tolerance, a nonzero delegated-node
+count, and movement in the independent Neutron debugfs performance counters.
+A successful benchmark exit or CPU fallback is not accelerator evidence.
+Confirm separately that a user outside the `neutron` group cannot open the
+device. Repeat the complete invariant and smoke procedure after a second cold
+boot.
+
+On failure, preserve the two UART logs, smoke JSON, `journalctl -b -k`,
+`systemctl --failed`, mount identity, CPU/memory state, device permissions, and
+hashes or store paths of selected inputs. Never attach proprietary bytes or
+decoded content to an issue. Power off, remove the evaluation SD, boot the
+retained accepted SD/eMMC baseline, and re-run its normal invariants. Rollback
+requires no eMMC repair because the evaluation procedure does not write it.
+
 ## Optional M7 remoteproc development
 
 The exported `frdm-imx95-m7-remoteproc` NixOS module adds the upstream

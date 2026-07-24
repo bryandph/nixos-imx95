@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: $0 <dtb> <report.json>" >&2
+  exit 64
+fi
+
+dtb=$1
+report=$2
+soc=/soc
+remoteproc=$soc/imx95-neutron-remoteproc@4ab00000
+accelerator=$soc/imx95-neutron@4ab00004
+reserved=/reserved-memory
+pool=$reserved/neutron_memory@100000000
+pool_address=$((0x100000000))
+pool_size=$((0x100000000))
+pool_end=$((pool_address + pool_size))
+
+assert_words() {
+  local expected=$1
+  local path=$2
+  local property=$3
+  local actual
+
+  actual=$(fdtget -tx "$dtb" "$path" "$property")
+  if [[ "$actual" != "$expected" ]]; then
+    printf '%s/%s: expected "%s", got "%s"\n' \
+      "$path" "$property" "$expected" "$actual" >&2
+    exit 1
+  fi
+}
+
+[[ $(fdtget -ts "$dtb" "$remoteproc" compatible) == \
+  fsl,imx95-neutron-rproc ]]
+[[ $(fdtget -ts "$dtb" "$accelerator" compatible) == \
+  fsl,imx95-neutron ]]
+assert_words "0 4ab00000 0 4" "$remoteproc" reg
+assert_words "0 4ab00004 0 400" "$accelerator" reg
+assert_words "0 13e 4" "$accelerator" interrupts
+assert_words "1 0 1 0" "$pool" reg
+[[ $(fdtget -ts "$dtb" "$pool" compatible) == shared-dma-pool ]]
+fdtget "$dtb" "$pool" reusable >/dev/null
+
+read -r -a clocks <<<"$(fdtget -tx "$dtb" "$accelerator" clocks)"
+[[ ${#clocks[@]} -eq 4 ]]
+[[ $(fdtget -ts "$dtb" "$accelerator" clock-names) == "npu npu_apb" ]]
+
+read -r -a accelerator_pd \
+  <<<"$(fdtget -tx "$dtb" "$accelerator" power-domains)"
+read -r -a remoteproc_pd \
+  <<<"$(fdtget -tx "$dtb" "$remoteproc" power-domains)"
+[[ ${#accelerator_pd[@]} -eq 2 ]]
+[[ ${#remoteproc_pd[@]} -eq 2 ]]
+[[ ${accelerator_pd[1]} == "${remoteproc_pd[1]}" ]]
+
+read -r -a iommu <<<"$(fdtget -tx "$dtb" "$accelerator" iommus)"
+[[ ${#iommu[@]} -eq 2 ]]
+[[ ${iommu[1]} == d ]]
+
+read -r -a rproc_link \
+  <<<"$(fdtget -tx "$dtb" "$accelerator" fsl,neutron-rproc)"
+read -r -a memory_link \
+  <<<"$(fdtget -tx "$dtb" "$accelerator" memory-region)"
+[[ ${#rproc_link[@]} -eq 1 ]]
+[[ ${#memory_link[@]} -eq 1 ]]
+
+for child in $(fdtget -l "$dtb" "$reserved"); do
+  [[ $child == neutron_memory@100000000 ]] && continue
+  child_path=$reserved/$child
+  if ! reg=$(fdtget -tx "$dtb" "$child_path" reg 2>/dev/null); then
+    continue
+  fi
+  read -r -a cells <<<"$reg"
+  if (( ${#cells[@]} % 4 != 0 )); then
+    echo "$child_path has an unsupported reserved-memory reg shape" >&2
+    exit 1
+  fi
+  for ((index = 0; index < ${#cells[@]}; index += 4)); do
+    address=$(((0x${cells[index]} << 32) | 0x${cells[index + 1]}))
+    size=$(((0x${cells[index + 2]} << 32) | 0x${cells[index + 3]}))
+    end=$((address + size))
+    if ((pool_address < end && address < pool_end)); then
+      echo "$pool overlaps $child_path" >&2
+      exit 1
+    fi
+  done
+done
+
+pool_inside_memory=0
+pool_follows_compiled_memory=0
+for child in $(fdtget -l "$dtb" / | grep '^memory@'); do
+  read -r -a cells <<<"$(fdtget -tx "$dtb" "/$child" reg)"
+  if (( ${#cells[@]} % 4 != 0 )); then
+    echo "/$child has an unsupported memory reg shape" >&2
+    exit 1
+  fi
+  for ((index = 0; index < ${#cells[@]}; index += 4)); do
+    address=$(((0x${cells[index]} << 32) | 0x${cells[index + 1]}))
+    size=$(((0x${cells[index + 2]} << 32) | 0x${cells[index + 3]}))
+    end=$((address + size))
+    if ((address <= pool_address && pool_end <= end)); then
+      pool_inside_memory=1
+    fi
+    if ((end == pool_address)); then
+      pool_follows_compiled_memory=1
+    fi
+  done
+done
+if ((pool_inside_memory == 0 && pool_follows_compiled_memory == 0)); then
+  echo "$pool is neither inside nor adjacent to compiled memory" >&2
+  exit 1
+fi
+
+compiled_memory_contains_pool=false
+bootloader_memory_fixup_required=true
+if ((pool_inside_memory == 1)); then
+  compiled_memory_contains_pool=true
+  bootloader_memory_fixup_required=false
+fi
+
+printf \
+  '{"reservedBytes":%s,"expectedLinuxVisibleDeltaBytes":%s,'\
+'"compiledMemoryContainsPool":%s,"bootloaderMemoryFixupRequired":%s}\n' \
+  "$pool_size" \
+  "$pool_size" \
+  "$compiled_memory_contains_pool" \
+  "$bootloader_memory_fixup_required" \
+  >"$report"

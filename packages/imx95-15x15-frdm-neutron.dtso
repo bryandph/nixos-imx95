@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include "imx95-clock.h"
+#include "imx95-power.h"
+
+&{/reserved-memory} {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	neutron_mem: neutron_memory@100000000 {
+		compatible = "shared-dma-pool";
+		reusable;
+		reg = <0x1 0x00000000 0x1 0x00000000>;
+	};
+};
+
+&{/soc} {
+	neutron_core: imx95-neutron-remoteproc@4ab00000 {
+		compatible = "fsl,imx95-neutron-rproc";
+		reg = <0x0 0x4ab00000 0x0 0x4>;
+		power-domains = <&scmi_devpd IMX95_PD_NPU>;
+	};
+
+	neutron: imx95-neutron@4ab00004 {
+		compatible = "fsl,imx95-neutron";
+		reg = <0x0 0x4ab00004 0x0 0x400>;
+		fsl,neutron-rproc = <&neutron_core>;
+		interrupts = <GIC_SPI 318 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&scmi_clk IMX95_CLK_NPU>,
+			 <&scmi_clk IMX95_CLK_NPUAPB>;
+		clock-names = "npu", "npu_apb";
+		power-domains = <&scmi_devpd IMX95_PD_NPU>;
+		iommus = <&smmu 0xd>;
+		memory-region = <&neutron_mem>;
+	};
+};
