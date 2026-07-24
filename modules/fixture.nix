@@ -305,9 +305,9 @@ in {
               jq -e '
                 .firmware.license == "MIT" and
                 .bsp.license == "MIT OR Apache-2.0" and
-                .bsp.rev == "8b92ab5b228aaee86fa5ee0df6534d944e3c8e67" and
+                .bsp.rev == "6f993f961a58e58a7c97e908890211779956cdce" and
                 .bsp.archiveHash ==
-                  "sha256-McLRisrw6Z0NHQxNCkKIy7c7ZXw2n2iW6GkxplIfwO4=" and
+                  "sha256-icvK805iM4jeDhTA/vkIDOyFpzLsAbYA+BKXEIt97iY=" and
                 .rust.target == "thumbv7em-none-eabihf" and
                 .rust.toolchain == "1.85.1"
               ' "$provenance" >/dev/null

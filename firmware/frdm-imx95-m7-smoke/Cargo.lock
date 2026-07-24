@@ -29,7 +29,7 @@ checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
 [[package]]
 name = "bsp-frdm-imx95"
 version = "0.1.0"
-source = "git+https://git.bph/bryan/frdm-imx95-bsp.git?rev=8b92ab5b228aaee86fa5ee0df6534d944e3c8e67#8b92ab5b228aaee86fa5ee0df6534d944e3c8e67"
+source = "git+https://git.bph/bryan/frdm-imx95-bsp.git?rev=6f993f961a58e58a7c97e908890211779956cdce#6f993f961a58e58a7c97e908890211779956cdce"
 dependencies = [
  "cortex-m",
  "critical-section",

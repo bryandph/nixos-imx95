@@ -9,8 +9,8 @@
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
   bsp = {
     repository = "https://git.bph/bryan/frdm-imx95-bsp";
-    rev = "8b92ab5b228aaee86fa5ee0df6534d944e3c8e67";
-    archiveHash = "sha256-McLRisrw6Z0NHQxNCkKIy7c7ZXw2n2iW6GkxplIfwO4=";
+    rev = "6f993f961a58e58a7c97e908890211779956cdce";
+    archiveHash = "sha256-icvK805iM4jeDhTA/vkIDOyFpzLsAbYA+BKXEIt97iY=";
     license = "MIT OR Apache-2.0";
   };
   bspArchive = fetchurl {

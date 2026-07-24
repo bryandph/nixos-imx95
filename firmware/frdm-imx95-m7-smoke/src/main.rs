@@ -3,8 +3,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use bsp_frdm_imx95::{
+    system_manager::SystemManager,
     timer::{self, SYSTICK_MAX_RELOAD, SysTickTicker},
-    uart::{Config, PollingUart, PreconfiguredLpuart3},
+    uart::{Config, Lpuart3, PollingUart},
 };
 use cortex_m_rt::exception;
 use embassy_executor::Spawner;
@@ -44,22 +45,16 @@ async fn main(spawner: Spawner) {
         idle_forever();
     };
 
-    let mut uart = claim_preconfigured_uart();
-    let uart_ready = uart.configure(Config::default()).is_ok();
-
-    if uart_ready {
-        let _ = write_all(&mut uart, BANNER);
-        let _ = uart.flush();
-    }
+    let Some(mut uart) = initialize_uart() else {
+        idle_forever();
+    };
+    let _ = write_all(&mut uart, BANNER);
+    let _ = uart.flush();
 
     let mut heartbeat = 0_u32;
     loop {
         ticker.wait_ticks(1).await;
         heartbeat = heartbeat.wrapping_add(1);
-
-        if !uart_ready {
-            continue;
-        }
 
         let _ = write_all(&mut uart, HEARTBEAT);
         let _ = write_u32(&mut uart, heartbeat);
@@ -74,11 +69,14 @@ async fn main(spawner: Spawner) {
 }
 
 #[allow(unsafe_code)]
-fn claim_preconfigured_uart() -> PreconfiguredLpuart3 {
-    // SAFETY: The remoteproc smoke workflow only uses this constructor after
-    // the operator has established the documented System Manager LPUART3,
-    // GPIO_IO14/GPIO_IO15, and 115200-baud precondition.
-    unsafe { PreconfiguredLpuart3::assume_preconfigured() }
+fn initialize_uart() -> Option<Lpuart3> {
+    // SAFETY: The reviewed remoteproc System Manager policy assigns the M7's
+    // MU5 A-side channel, LPUART3, GPIO_IO14, and GPIO_IO15 to this firmware.
+    let mut system_manager = unsafe { SystemManager::take() }?;
+    // SAFETY: The same policy grants exclusive LPUART3 and console-pad access
+    // to this single-core firmware.
+    let uart = unsafe { Lpuart3::take() }?;
+    uart.initialize(&mut system_manager, Config::default()).ok()
 }
 
 fn write_all<U: PollingUart>(uart: &mut U, bytes: &[u8]) -> Result<(), U::Error> {
