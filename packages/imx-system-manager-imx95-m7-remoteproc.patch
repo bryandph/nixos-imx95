@@ -1,8 +1,23 @@
 diff --git a/configs/mx95evk.cfg b/configs/mx95evk.cfg
-index a9f09f8..751fd51 100644
 --- a/configs/mx95evk.cfg
 +++ b/configs/mx95evk.cfg
-@@ -594,7 +594,8 @@ CLOCK_USBPHYBURUNIN       ALL
+@@ -340,11 +340,12 @@
+ # M7 EENV                                                                  #
+ #==========================================================================#
+ 
+-LM1                 name="M7", rpc=scmi, boot=2, skip=1, did=4, safe=seenv
++LM1                 name="M7", rpc=scmi, boot=2, skip=1, did=4
+ 
+-DFMT0:              sa=secure
+-DFMT1:              sa=secure, pa=privileged
++DFMT0:              sa=nonsecure
++DFMT1:              sa=nonsecure, pa=privileged
+ OWNER:              perm=rw, api=all
++ACCESS:             perm=rw, api=all, mdid=none
+ 
+ EXEC:               perm=full
+ DATA:               perm=rw
+@@ -594,7 +595,8 @@
  CLOCK_VPUDSP              ALL
  HSIO_PLL                  ALL
  LDB_PLL                   ALL
@@ -12,3 +27,9 @@ index a9f09f8..751fd51 100644
  PERF_A55                  ALL
  RTC                       ALL, test
  SENSOR_TEMP_A55           ALL
+@@ -1024,4 +1026,5 @@
+ GPU                 DATA, begin=0x04D900000, end=0x04DD7FFFF
+ DDR                 EXEC, begin=0x088000000, end=0x089FFFFFF, clr=8
+ DDR                 EXEC, begin=0x08E000000, end=0x87FFFFFFF
++M7MIX               DATA, begin=0x020380000, end=0x02047FFFF
+ 

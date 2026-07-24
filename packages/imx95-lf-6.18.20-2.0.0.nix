@@ -109,8 +109,8 @@
       bootContainer = {
         systemManagerConfig = "mx95evk";
         systemManagerPolicy = "m7-remoteproc-lmm";
-        expectedSha256 = "3edd7709521907d96d6b0dc91e401d79027738e96f3e7a0802563c5c206d0081";
-        expectedSize = 2997248;
+        expectedSha256 = "0dd1b75a176c4135d744d708f8629842599aebc600ab9444e9509ccec82230a4";
+        expectedSize = 2995200;
         fileName = "imx-boot-imx95-15x15-lpddr4x-frdm-sd.bin-flash_a55-m7-remoteproc";
       };
       firmwareFormat = "elf32-littlearm";
