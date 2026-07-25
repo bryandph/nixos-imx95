@@ -22,6 +22,7 @@
 
       DRM = yes;
       DRM_PANTHOR = module;
+      MALI_MIDGARD = no;
 
       MEDIA_SUPPORT = yes;
       VIDEO_DEV = yes;
@@ -33,6 +34,9 @@
       IMX_NEUTRON_REMOTEPROC = yes;
       NEUTRON = yes;
       DEBUG_FS = yes;
+
+      NETFILTER_XT_MATCH_COMMENT = module;
+      NETFILTER_XT_MATCH_PKTTYPE = module;
 
       MXC_MUR = yes;
       MXC_VIDEO_WAVE6_CTRL = yes;

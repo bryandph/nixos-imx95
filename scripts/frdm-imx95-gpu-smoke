@@ -4,22 +4,33 @@ report=${FRDM_IMX95_GPU_REPORT:-"$PWD/frdm-imx95-gpu-smoke.json"}
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/frdm-imx95-gpu-smoke.XXXXXX")
 trap 'rm -rf -- "$work_dir"' EXIT
 
+drm_class=${FRDM_IMX95_DRM_CLASS:-/sys/class/drm}
 render_node=
-for candidate in /sys/class/drm/renderD*; do
+discovered_drivers=
+for candidate in "$drm_class"/renderD*; do
   if [ -e "$candidate/device/driver" ]; then
-    render_node=$candidate
-    break
+    candidate_driver=$(basename "$(readlink -f "$candidate/device/driver")")
+    candidate_name=$(basename "$candidate")
+    if [ -z "$discovered_drivers" ]; then
+      discovered_drivers="$candidate_name=$candidate_driver"
+    else
+      discovered_drivers="$discovered_drivers, $candidate_name=$candidate_driver"
+    fi
+    if [ "$candidate_driver" = "$FRDM_IMX95_GPU_KERNEL_DRIVER" ]; then
+      render_node=$candidate
+      kernel_driver=$candidate_driver
+      break
+    fi
   fi
 done
 
 if [ -z "$render_node" ]; then
-  echo "no DRM render node with a bound driver was found" >&2
-  exit 1
-fi
-
-kernel_driver=$(basename "$(readlink -f "$render_node/device/driver")")
-if [ "$kernel_driver" != "$FRDM_IMX95_GPU_KERNEL_DRIVER" ]; then
-  echo "unexpected DRM driver: $kernel_driver" >&2
+  if [ -z "$discovered_drivers" ]; then
+    discovered_drivers="none"
+  fi
+  echo \
+    "no DRM render node bound to $FRDM_IMX95_GPU_KERNEL_DRIVER; discovered: $discovered_drivers" \
+    >&2
   exit 1
 fi
 

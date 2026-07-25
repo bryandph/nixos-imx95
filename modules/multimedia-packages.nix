@@ -122,6 +122,66 @@
             touch "$out"
           '';
 
+          multimedia-gpu-render-node-selection =
+            pkgs.runCommand "frdm-imx95-gpu-render-node-selection" {
+              nativeBuildInputs = [
+                pkgs.coreutils
+                pkgs.jq
+              ];
+            } ''
+              mkdir -p \
+                bin \
+                drivers/imx95-dpu \
+                drivers/panthor \
+                sys/class/drm/renderD128/device \
+                sys/class/drm/renderD129/device
+              ln -s "$PWD/drivers/imx95-dpu" \
+                sys/class/drm/renderD128/device/driver
+              ln -s "$PWD/drivers/panthor" \
+                sys/class/drm/renderD129/device/driver
+
+              cat >bin/frdm-imx95-egl-render <<'EOF'
+              #!${pkgs.runtimeShell}
+              printf '%s\n' '{"accepted":true}'
+              EOF
+              cat >bin/vulkaninfo <<'EOF'
+              #!${pkgs.runtimeShell}
+              cat <<'SUMMARY'
+              deviceName = Mali-G310
+              driverName = PanVK
+              SUMMARY
+              EOF
+              chmod +x bin/frdm-imx95-egl-render bin/vulkaninfo
+
+              export PATH="$PWD/bin:$PATH"
+              export FRDM_IMX95_DRM_CLASS="$PWD/sys/class/drm"
+              export FRDM_IMX95_GPU_FIRMWARE_SOURCE=linux-firmware
+              export FRDM_IMX95_GPU_KERNEL_DRIVER=panthor
+              export FRDM_IMX95_GPU_RENDERER=Mali-G310
+              export FRDM_IMX95_GPU_VULKAN_DRIVER=PanVK
+              export FRDM_IMX95_GPU_REPORT="$PWD/report.json"
+
+              ${lib.getExe pkgs.bash} ${../scripts/frdm-imx95-gpu-smoke}
+              jq -e \
+                '.accepted and
+                 .drm.node == "/dev/renderD129" and
+                 .drm.driver == "panthor"' \
+                report.json >/dev/null
+
+              rm sys/class/drm/renderD129/device/driver
+              if ${lib.getExe pkgs.bash} ${../scripts/frdm-imx95-gpu-smoke} \
+                2>failure.txt; then
+                echo "GPU smoke unexpectedly accepted the DPU render node" >&2
+                exit 1
+              fi
+              grep -q \
+                'no DRM render node bound to panthor; discovered: renderD128=imx95-dpu' \
+                failure.txt
+
+              mkdir "$out"
+              cp report.json failure.txt "$out/"
+            '';
+
           wave6-module-policy = pkgs.runCommand "frdm-imx95-wave6-module-policy" {} ''
             test ${lib.escapeShellArg wave6.config.hardware.nxp.imx95.wave6.providerKind} = \
               full-nxp-reference
