@@ -1,0 +1,79 @@
+set -euo pipefail
+
+report=${FRDM_IMX95_GPU_REPORT:-"$PWD/frdm-imx95-gpu-smoke.json"}
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/frdm-imx95-gpu-smoke.XXXXXX")
+trap 'rm -rf -- "$work_dir"' EXIT
+
+render_node=
+for candidate in /sys/class/drm/renderD*; do
+  if [ -e "$candidate/device/driver" ]; then
+    render_node=$candidate
+    break
+  fi
+done
+
+if [ -z "$render_node" ]; then
+  echo "no DRM render node with a bound driver was found" >&2
+  exit 1
+fi
+
+kernel_driver=$(basename "$(readlink -f "$render_node/device/driver")")
+if [ "$kernel_driver" != "$FRDM_IMX95_GPU_KERNEL_DRIVER" ]; then
+  echo "unexpected DRM driver: $kernel_driver" >&2
+  exit 1
+fi
+
+frdm-imx95-egl-render >"$work_dir/egl.json"
+vulkaninfo --summary >"$work_dir/vulkan.txt"
+
+if ! grep -Fqi "$FRDM_IMX95_GPU_RENDERER" "$work_dir/vulkan.txt"; then
+  echo "Vulkan did not enumerate the expected Mali device" >&2
+  exit 1
+fi
+if ! grep -Fqi "$FRDM_IMX95_GPU_VULKAN_DRIVER" "$work_dir/vulkan.txt"; then
+  echo "Vulkan did not select the expected PanVK driver" >&2
+  exit 1
+fi
+
+vulkan_device_line=$(
+  grep -Ei -m 1 \
+    "^[[:space:]]*deviceName[[:space:]]*=.*$FRDM_IMX95_GPU_RENDERER" \
+    "$work_dir/vulkan.txt"
+)
+vulkan_driver_line=$(
+  grep -Ei -m 1 \
+    "^[[:space:]]*driverName[[:space:]]*=.*$FRDM_IMX95_GPU_VULKAN_DRIVER" \
+    "$work_dir/vulkan.txt"
+)
+vulkan_device=${vulkan_device_line#*=}
+vulkan_device=${vulkan_device#"${vulkan_device%%[![:space:]]*}"}
+vulkan_driver=${vulkan_driver_line#*=}
+vulkan_driver=${vulkan_driver#"${vulkan_driver%%[![:space:]]*}"}
+if [ -z "$vulkan_device" ] || [ -z "$vulkan_driver" ]; then
+  echo "Vulkan summary omitted required device or driver identity" >&2
+  exit 1
+fi
+
+jq -n \
+  --slurpfile egl "$work_dir/egl.json" \
+  --arg drmNode "/dev/$(basename "$render_node")" \
+  --arg firmwareSource "$FRDM_IMX95_GPU_FIRMWARE_SOURCE" \
+  --arg kernelDriver "$kernel_driver" \
+  --arg vulkanDevice "$vulkan_device" \
+  --arg vulkanDriver "$vulkan_driver" \
+  '{
+    accepted: true,
+    drm: {
+      node: $drmNode,
+      driver: $kernelDriver
+    },
+    firmwareSource: $firmwareSource,
+    egl: $egl[0],
+    vulkan: {
+      accepted: true,
+      device: $vulkanDevice,
+      driver: $vulkanDriver
+    }
+  }' >"$report"
+
+echo "FRDM-i.MX95 GPU smoke accepted: $report"

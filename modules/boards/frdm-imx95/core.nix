@@ -46,10 +46,14 @@
 
     assertions = [
       {
-        assertion = lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.0";
+        assertion =
+          lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.0"
+          || (config.boot.kernelPackages.kernel.providerKind or "")
+          == "full-nxp-reference";
         message = ''
-          FRDM-i.MX95 requires Linux 7.0 or newer so the upstream
-          ${requiredDtb} board device tree is available.
+          FRDM-i.MX95 requires Linux 7.0 or newer for the upstream
+          ${requiredDtb} board device tree, except when an optional feature
+          explicitly selects the release-pinned full NXP provider.
         '';
       }
       {

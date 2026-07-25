@@ -411,6 +411,112 @@
     };
   };
 
+  multimedia = {
+    release = "6.18.20-2.0.0";
+
+    mainline = {
+      kernel = {
+        sourceAuthority = "neutron.kernel.upstreamComparison";
+        requiredVersion = "7.0";
+        boardDtb = "freescale/imx95-15x15-frdm.dtb";
+      };
+      gpu = {
+        kernelDriver = "panthor";
+        kernelSourcePath = "drivers/gpu/drm/panthor";
+        deviceTreeCompatible = [
+          "nxp,imx95-mali"
+          "arm,mali-valhall-csf"
+        ];
+        userspace = "mesa";
+        renderer = "Mali-G310";
+        vulkanDriver = "PanVK";
+        firmware = {
+          source = "linux-firmware";
+          memberFamily = "arm/mali/arch10.8";
+        };
+      };
+      jpeg = {
+        driver = "mxc-jpeg";
+        kernelSourcePath = "drivers/media/platform/nxp/imx-jpeg";
+        userspace = "v4l2";
+        requiredRoles = [
+          "encoder"
+          "decoder"
+        ];
+        formats = {
+          compressed = "JPEG";
+          smokeRaw = "BGR3";
+        };
+      };
+    };
+
+    wave6 = {
+      kernelDelta = import ./imx95-wave6-kernel-delta.nix;
+      firmware = {
+        distributionAuthority = "licensedFirmware.ddr.distribution";
+        recipe = {
+          repositoryAuthority = "release.metaImx";
+          path = "meta-imx-bsp/recipes-bsp/firmware-imx/firmware-imx_8.32.bb";
+        };
+        license = {
+          fullName = "NXP Software License Agreement (LA_OPT_NXP_Software_License v63, May 2025)";
+          additionalDistributionSection = "2.3";
+          redistributable = false;
+        };
+        member = {
+          fileName = "wave633c_codec_fw.bin";
+          archivePath = "firmware-imx-8.32-1991416/firmware/vpu/wave633c_codec_fw.bin";
+          installPath = "wave633c_codec_fw.bin";
+          installPaths = ["wave633c_codec_fw.bin"];
+          identity = "derived-from-fixed-distribution";
+          identityRationale = ''
+            The exact member hash and size have not been inspected by an
+            operator. The enclosing distribution has a fixed identity and the
+            package selects this single release-recipe member. Do not invent a
+            member identity; add one only after licensed local inspection.
+          '';
+        };
+        localImport = {
+          storePayload = "complete-fixed-distribution";
+          packageOutput = "selected-member-only";
+          runtimeClosureContainsDistribution = false;
+          rationale = ''
+            The standalone member hash and size are not yet available, so the
+            declarative requireFile boundary must identify the complete
+            operator-accepted distribution. The helper therefore adds that
+            fixed distribution to the local store as a build source. The
+            firmware derivation copies only the selected member; its output
+            contains no store-path reference to the source distribution, so
+            systems and images close over only the member package.
+          '';
+        };
+        publicationPolicy = {
+          allowSubstitutes = false;
+          hydra = false;
+          preferLocalBuild = true;
+          publicCache = false;
+          publicImage = false;
+          publicRelease = false;
+        };
+      };
+      userspace = {
+        interface = "v4l2-mem2mem";
+        probe = "v4l2-ctl";
+        expectedDriver = "wave6";
+        smokeFrame = {
+          width = 256;
+          height = 128;
+          pixelFormat = "NV12";
+          bytes = 49152;
+        };
+        codecs = [
+          "H264"
+          "HEVC"
+        ];
+      };
+    };
+  };
+
   sources = {
     uboot = {
       pname = "uboot-imx95-frdm";

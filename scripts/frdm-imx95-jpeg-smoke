@@ -1,0 +1,99 @@
+set -euo pipefail
+
+report=${FRDM_IMX95_JPEG_REPORT:-"$PWD/frdm-imx95-jpeg-smoke.json"}
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/frdm-imx95-jpeg-smoke.XXXXXX")
+trap 'rm -rf -- "$work_dir"' EXIT
+
+encoder=
+decoder=
+encoder_formats=
+decoder_formats=
+
+for device in /dev/video*; do
+  [ -e "$device" ] || continue
+  identity=$(v4l2-ctl --device="$device" --all 2>/dev/null || true)
+  if ! grep -Fqi "$FRDM_IMX95_JPEG_DRIVER" <<<"$identity"; then
+    continue
+  fi
+
+  output_formats=$(v4l2-ctl --device="$device" --list-formats-out 2>/dev/null || true)
+  capture_formats=$(v4l2-ctl --device="$device" --list-formats 2>/dev/null || true)
+
+  if grep -Eq "'(JPEG|MJPG)'" <<<"$capture_formats" &&
+    grep -Eq "'(BGR3|RGB3|NV12|YUYV)'" <<<"$output_formats"; then
+    encoder=$device
+    encoder_formats="$output_formats"$'\n'"$capture_formats"
+  fi
+  if grep -Eq "'(JPEG|MJPG)'" <<<"$output_formats" &&
+    grep -Eq "'(BGR3|RGB3|NV12|YUYV)'" <<<"$capture_formats"; then
+    decoder=$device
+    decoder_formats="$output_formats"$'\n'"$capture_formats"
+  fi
+done
+
+if [ -z "$encoder" ] || [ -z "$decoder" ]; then
+  echo "could not discover distinct mxc-jpeg encoder and decoder roles" >&2
+  exit 1
+fi
+if [ "$encoder" = "$decoder" ]; then
+  echo "JPEG encoder and decoder unexpectedly resolved to one device" >&2
+  exit 1
+fi
+
+dd if=/dev/zero of="$work_dir/input.bgr" bs=12288 count=1 status=none
+
+v4l2-ctl --device="$encoder" \
+  --set-fmt-video-out=width=64,height=64,pixelformat=BGR3 \
+  --set-fmt-video=width=64,height=64,pixelformat=JPEG \
+  --stream-out-mmap \
+  --stream-mmap \
+  --stream-from="$work_dir/input.bgr" \
+  --stream-to="$work_dir/encoded.jpg" \
+  --stream-count=1
+
+test -s "$work_dir/encoded.jpg"
+
+v4l2-ctl --device="$decoder" \
+  --set-fmt-video-out=width=64,height=64,pixelformat=JPEG \
+  --set-fmt-video=width=64,height=64,pixelformat=BGR3 \
+  --stream-out-mmap \
+  --stream-mmap \
+  --stream-from="$work_dir/encoded.jpg" \
+  --stream-to="$work_dir/decoded.bgr" \
+  --stream-count=1
+
+decoded_size=$(stat -c %s "$work_dir/decoded.bgr")
+if [ "$decoded_size" -ne 12288 ]; then
+  echo "decoded BGR3 frame has $decoded_size bytes; expected 12288" >&2
+  exit 1
+fi
+
+jq -n \
+  --arg decoder "$decoder" \
+  --arg decoderFormats "$decoder_formats" \
+  --arg driver "$FRDM_IMX95_JPEG_DRIVER" \
+  --arg encoder "$encoder" \
+  --arg encoderFormats "$encoder_formats" \
+  --argjson decodedBytes "$decoded_size" \
+  --argjson encodedBytes "$(stat -c %s "$work_dir/encoded.jpg")" \
+  '{
+    accepted: true,
+    driver: $driver,
+    encoder: {
+      device: $encoder,
+      formats: ($encoderFormats | split("\n") | map(select(length > 0)))
+    },
+    decoder: {
+      device: $decoder,
+      formats: ($decoderFormats | split("\n") | map(select(length > 0)))
+    },
+    frame: {
+      width: 64,
+      height: 64,
+      pixelFormat: "BGR3",
+      encodedBytes: $encodedBytes,
+      decodedBytes: $decodedBytes
+    }
+  }' >"$report"
+
+echo "FRDM-i.MX95 JPEG smoke accepted: $report"

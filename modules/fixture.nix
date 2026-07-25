@@ -25,6 +25,7 @@
     "frdm-imx95-source-sd-image-layout"
     "frdm-imx95-m7-compatibility-provider-evaluation"
     "frdm-imx95-neutron-smoke"
+    "nixos-frdm-imx95-multimedia.img.zst"
     "imx-boot-imx95"
     "imx95"
     "imx95-neutron-converted-model"
@@ -99,6 +100,13 @@ in {
         ];
       };
 
+      frdm-imx95-multimedia = mkBoard {
+        imageBaseName = "nixos-frdm-imx95-multimedia";
+        modules = [
+          config.flake.modules.nixos.frdm-imx95-multimedia
+        ];
+      };
+
       frdm-imx95-compatibility = mkBoard {
         imageBaseName = "nixos-frdm-imx95-compatibility";
         modules = [
@@ -134,6 +142,7 @@ in {
       let
         board = config.flake.nixosConfigurations.frdm-imx95;
         m7Board = config.flake.nixosConfigurations.frdm-imx95-m7-remoteproc;
+        multimediaBoard = config.flake.nixosConfigurations.frdm-imx95-multimedia;
         neutronBoard = config.flake.nixosConfigurations.frdm-imx95-neutron-npu;
         neutronRuntime = neutronBoard.config.system.build.runtime;
         neutronSdImage = neutronBoard.config.system.build.frdmImx95SdImage.overrideAttrs (old: {
@@ -270,6 +279,8 @@ in {
             frdm-imx95-sd-image = sdImage;
             frdm-imx95-m7-remoteproc-sd-image =
               m7Board.config.system.build.frdmImx95SdImage;
+            frdm-imx95-multimedia-sd-image =
+              multimediaBoard.config.system.build.frdmImx95SdImage;
             frdm-imx95-m7-smoke = m7SmokeFirmware;
             frdm-imx95-m7-source-boot-container = m7SourceBootContainer;
             frdm-imx95-source-boot-container = sourceBootContainer;

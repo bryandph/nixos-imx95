@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+distribution_name="firmware-imx-8.32-1991416.bin"
+distribution_sha256="11396e5798b62cd61963db806c0c05500887bc62a98e1d16dbc3014aa0c21a2a"
+
+if [ "$#" -ne 2 ] || [ "$1" != "--accept-license" ]; then
+  echo "usage: $0 --accept-license /path/to/$distribution_name" >&2
+  exit 2
+fi
+
+distribution=$2
+if [ ! -f "$distribution" ]; then
+  echo "distribution not found: $distribution" >&2
+  exit 1
+fi
+
+actual_sha256=$(sha256sum "$distribution" | awk '{print $1}')
+if [ "$actual_sha256" != "$distribution_sha256" ]; then
+  echo "$distribution_name hash mismatch" >&2
+  exit 1
+fi
+
+store_path=$(nix-store --add-fixed sha256 "$distribution")
+echo "Imported the fixed-identity NXP distribution as $store_path"
+echo "Only the Wave6 package output selects wave633c_codec_fw.bin."
+echo "Do not publish this store path or a dependent output."
