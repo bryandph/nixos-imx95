@@ -9,16 +9,12 @@
   m7Vring1 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 1;
   m7Vring2 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 2;
   m7Vring3 = builtins.elemAt release.m7.remoteproc.sharedMemory.vrings 3;
-  neutronRuntimeRoot = builtins.getEnv "NIXOS_IMX95_NEUTRON_RUNTIME_ROOT";
-  neutronConvertedModel = builtins.getEnv "NIXOS_IMX95_NEUTRON_CONVERTED_MODEL";
-  neutronConvertedModelSha256 =
-    builtins.getEnv "NIXOS_IMX95_NEUTRON_CONVERTED_MODEL_SHA256";
-  neutronInputsConfigured = builtins.all (value: value != "") [
-    neutronRuntimeRoot
-    neutronConvertedModel
-    neutronConvertedModelSha256
-  ];
   allowedUnfreeNames = [
+    "NeutronDriver.h"
+    "NeutronErrors.h"
+    "NeutronFirmware.elf"
+    "libNeutronDriver.so"
+    "mobilenet_v1_1.0_224_quant-neutron.tflite"
     "frdm-imx95-source-boot-container"
     "frdm-imx95-source-container-reproducibility"
     "frdm-imx95-source-container-structure"
@@ -118,7 +114,7 @@ in {
         ];
       };
     }
-    // lib.optionalAttrs neutronInputsConfigured {
+    // {
       frdm-imx95-all-features = mkBoard {
         imageBaseName = "nixos-frdm-imx95-all-features";
         modules = [
@@ -127,13 +123,6 @@ in {
           config.flake.modules.nixos.frdm-imx95-multimedia
           config.flake.modules.nixos.frdm-imx95-neutron-npu
           config.flake.modules.nixos.frdm-imx95-wave6-vpu
-          {
-            hardware.nxp.imx95.neutron = {
-              runtimeRoot = builtins.storePath neutronRuntimeRoot;
-              convertedModel = builtins.storePath neutronConvertedModel;
-              convertedModelSha256 = neutronConvertedModelSha256;
-            };
-          }
         ];
       };
 
@@ -141,13 +130,6 @@ in {
         imageBaseName = "nixos-frdm-imx95-neutron-npu";
         modules = [
           config.flake.modules.nixos.frdm-imx95-neutron-npu
-          {
-            hardware.nxp.imx95.neutron = {
-              runtimeRoot = builtins.storePath neutronRuntimeRoot;
-              convertedModel = builtins.storePath neutronConvertedModel;
-              convertedModelSha256 = neutronConvertedModelSha256;
-            };
-          }
         ];
       };
     };
@@ -335,7 +317,7 @@ in {
             uboot-imx95-frdm = uboot;
             default = sdImage;
           }
-          // lib.optionalAttrs neutronInputsConfigured {
+          // {
             frdm-imx95-all-features-sd-image = allFeaturesSdImage;
             frdm-imx95-neutron-npu-sd-image = neutronSdImage;
           };
@@ -1013,7 +995,7 @@ in {
                 sha256sum image.img > "$out/image.sha256"
               '';
           }
-          // lib.optionalAttrs neutronInputsConfigured {
+          // {
             all-features-module-composition = pkgs.runCommand "frdm-imx95-all-features-module-composition" {} ''
               test ${lib.escapeShellArg allFeaturesBoard.config.boot.kernelPackages.kernel.providerKind} = \
                 nxp-full-combined

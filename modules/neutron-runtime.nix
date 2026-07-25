@@ -24,9 +24,7 @@ in {
     smokeRunner = pkgs.callPackage ../packages/frdm-imx95-neutron-smoke-runner.nix {};
     tensorflowLite = pkgs.callPackage ../packages/tensorflow-lite-imx95.nix {};
     delegateSource = pkgs.callPackage ../packages/tflite-neutron-delegate-source.nix {};
-    policyRuntime = pkgs.callPackage ../packages/imx95-neutron-runtime.nix {
-      runtimeRoot = pkgs.emptyDirectory;
-    };
+    policyRuntime = pkgs.callPackage ../packages/imx95-neutron-runtime.nix {};
     policyAggregate = pkgs.callPackage ../packages/tflite-neutron-delegate-imx95.nix {
       runtime = policyRuntime;
       source = delegateSource;

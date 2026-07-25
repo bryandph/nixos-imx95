@@ -9,29 +9,29 @@
   runtime = release.neutron.runtime;
   records =
     [
-      (runtime.license.file // {destination = "-";})
-      (runtime.license.contentRegister // {destination = "-";})
-      (runtime.sbom // {destination = "-";})
+      (runtime.license.file // {fileName = "-";})
+      (runtime.license.contentRegister // {fileName = "-";})
+      (runtime.sbom // {fileName = "-";})
       (runtime.members.firmware
         // {
-          destination = "lib/firmware/NeutronFirmware.elf";
+          fileName = builtins.baseNameOf runtime.members.firmware.path;
         })
       (runtime.members.driver
         // {
-          destination = "lib/libNeutronDriver.so";
+          fileName = builtins.baseNameOf runtime.members.driver.path;
         })
     ]
     ++ map (
       header:
         header
         // {
-          destination = "include/${builtins.baseNameOf header.path}";
+          fileName = builtins.baseNameOf header.path;
         }
     )
     runtime.members.headers;
   recordLines =
     lib.concatMapStringsSep "\n" (
-      record: "    ${lib.escapeShellArg "${record.path}|${record.blobSha1}|${toString record.size}|${record.destination}"}"
+      record: "    ${lib.escapeShellArg "${record.path}|${record.blobSha1}|${record.sha256 or "-"}|${toString record.size}|${record.fileName}"}"
     )
     records;
 in
@@ -62,12 +62,9 @@ in
       ${recordLines}
             )
 
-            work_dir=$(mktemp -d "''${TMPDIR:-/tmp}/imx95-neutron-runtime.XXXXXX")
-            trap 'rm -rf -- "$work_dir"' EXIT
-            import_root="$work_dir/imx95-neutron-runtime-${release.neutron.versionLabels.sbom}"
-
+            imported=0
             for record in "''${records[@]}"; do
-              IFS='|' read -r relative_path expected_blob expected_size destination <<<"$record"
+              IFS='|' read -r relative_path expected_blob expected_sha256 expected_size file_name <<<"$record"
               source_path="$source_root/$relative_path"
 
               if [[ ! -f "$source_path" ]]; then
@@ -87,14 +84,24 @@ in
                 exit 1
               fi
 
-              if [[ "$destination" != "-" ]]; then
-                install -Dm0444 "$source_path" "$import_root/$destination"
+              if [[ "$file_name" != "-" ]]; then
+                actual_sha256=$(sha256sum "$source_path" | cut -d' ' -f1)
+                if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+                  echo "Neutron member SHA-256 mismatch: $relative_path" >&2
+                  exit 1
+                fi
+
+                store_path=$(nix-store --add-fixed sha256 "$source_path")
+                echo "Imported $file_name as $store_path"
+                ((imported += 1))
               fi
             done
 
-            store_path=$(nix-store --add-fixed --recursive sha256 "$import_root")
-            echo "Imported the four approved Neutron runtime members as $store_path"
-            echo "Keep this path local; do not publish it or dependent outputs to a public cache."
+            if [[ "$imported" -ne 4 ]]; then
+              echo "Expected to import four Neutron runtime members; imported $imported" >&2
+              exit 1
+            fi
+            echo "Keep these paths local; do not publish them or dependent outputs to a public cache."
     '';
     meta = {
       description = "License-gated importer for the pinned i.MX95 Neutron runtime members";

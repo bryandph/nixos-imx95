@@ -9,6 +9,11 @@
       config.allowUnfreePredicate = pkg:
         builtins.elem (lib.getName pkg) [
           "eiq-neutron-sdk"
+          "NeutronDriver.h"
+          "NeutronErrors.h"
+          "NeutronFirmware.elf"
+          "libNeutronDriver.so"
+          "mobilenet_v1_1.0_224_quant-neutron.tflite"
           "frdm-imx95-source-boot-container"
           "frdm-imx95-source-container-reproducibility"
           "frdm-imx95-source-container-structure"

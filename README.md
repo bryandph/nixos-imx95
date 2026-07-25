@@ -214,29 +214,38 @@ nix run --impure .#import-imx95-neutron-runtime -- \
 ```
 
 The command verifies the license, content register, SBOM, firmware, userspace
-library, and required headers before adding only the runtime members to the
-local Nix store. Retain the reported store path; it is the
-`hardware.nxp.imx95.neutron.runtimeRoot` value.
+library, and required headers before adding the four runtime members
+individually to the local Nix store under their release-pinned names and
+SHA-256 identities. No runtime path needs to be passed to later evaluations.
 
-Model conversion runs as an `x86_64-linux` derivation, so Nix can schedule it
-on a compatible remote builder even when the initiating host is macOS. Point
-the impure evaluation at the exact operator-downloaded Python 3.11 wheel:
+Run model conversion on an `x86_64-linux` host. Point the impure evaluation at
+the exact operator-downloaded Python 3.11 wheel:
 
 ```console
 export NIXOS_IMX95_NEUTRON_CONVERTER_WHEEL=\
 /path/to/eiq_neutron_sdk-3.1.2-cp311-cp311-manylinux_2_31_x86_64.whl
-converted_root="$(
+converter_root="$(
   nix build --impure -j 1 --no-link --print-out-paths \
-    .#packages.x86_64-linux.imx95-neutron-converted-model
+    .#packages.x86_64-linux.eiq-neutron-sdk
 )"
-converted_model="$converted_root/share/imx95-neutron/\
-mobilenet_v1_1.0_224_quant-neutron.tflite"
+model_root="$(
+  nix build --impure -j 1 --no-link --print-out-paths \
+    .#packages.x86_64-linux.imx95-neutron-model-source
+)"
+nix run --impure .#convert-imx95-neutron-model -- \
+  --accept-license \
+  "$NIXOS_IMX95_NEUTRON_CONVERTER_WHEEL" \
+  "$converter_root/bin/neutron_converter" \
+  "$model_root/share/models/mobilenet_v1_1.0_224_quant.tflite" \
+  946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba
+unset NIXOS_IMX95_NEUTRON_CONVERTER_WHEEL
 ```
 
 The derivation verifies the wheel and source-model identities, runs two
-conversions with `--force-determinism`, rejects differing results, and asserts
-the converted identity pinned in the release mapping. Keep the resulting path
-local unless affirmative redistribution authority is established.
+conversions with `--force-determinism`, rejects differing results, asserts the
+converted identity pinned in the release mapping, and imports the verified
+model under its pinned file name. Keep the resulting path local unless
+affirmative redistribution authority is established.
 
 Compose the module only in a dedicated evaluation configuration:
 
@@ -248,37 +257,26 @@ Compose the module only in a dedicated evaluation configuration:
     inputs.nixos-imx95.nixosModules.frdm-imx95-neutron-npu
   ];
 
-  hardware.nxp.imx95.neutron = {
-    runtimeRoot = /nix/store/operator-imported-runtime;
-    convertedModel = /nix/store/operator-imported-model;
-    convertedModelSha256 = "<reviewed-two-pass-sha256>";
-  };
-
   users.users.<operator>.extraGroups = ["neutron"];
 }
 ```
 
-The paths and hash above are placeholders, not publishable configuration.
 Aggregate systems and images inherit the unfree, non-redistributable,
 local-build-preferred, substitute-disabled, and Hydra-disabled policy.
 
 ### Capture and accept the evaluation
 
-Expose the two accepted local store paths and the reviewed two-pass model hash
-to the impure fixture evaluation, then build its dedicated image:
+After importing the four runtime members and converted model, build the
+dedicated image without any licensed-input environment variables:
 
 ```console
-export NIXOS_IMX95_NEUTRON_RUNTIME_ROOT=/nix/store/operator-imported-runtime
-export NIXOS_IMX95_NEUTRON_CONVERTED_MODEL="$converted_model"
-export NIXOS_IMX95_NEUTRON_CONVERTED_MODEL_SHA256=\
-946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba
 nix build --impure -j 1 \
   .#packages.aarch64-linux.frdm-imx95-neutron-npu-sd-image
 ```
 
-All three variables are required together. When any is absent, the
-`frdm-imx95-neutron-npu` configuration and image output are intentionally
-absent from the public/default flake surface.
+The configuration and image output are always present. If any licensed member
+is absent, its `requireFile` boundary fails closed with the exact local import
+procedure. The bytes remain operator-supplied and must not be published.
 
 Identify the removable target independently with `findmnt`, `lsblk`, and the
 MMC sysfs device type; never infer it from a previous `mmcblk` number. Write
@@ -355,12 +353,6 @@ remain separate and buildable.
     inputs.nixos-imx95.nixosModules.frdm-imx95-wave6-vpu
   ];
 
-  hardware.nxp.imx95.neutron = {
-    runtimeRoot = /nix/store/operator-imported-runtime;
-    convertedModel = /nix/store/operator-imported-model;
-    convertedModelSha256 = "<reviewed-two-pass-sha256>";
-  };
-
   users.users.<operator>.extraGroups = [
     "neutron"
     "video"
@@ -372,8 +364,7 @@ The Wave6 firmware and Neutron runtime/model boundaries remain unfree,
 non-redistributable, local-build preferred, substitute-disabled, and excluded
 from Hydra. Never publish the composed closure, SD image, imported source
 distribution, converted model, or a hardware report containing licensed
-bytes. With all three Neutron fixture variables described above set, the
-conditional image output is
+bytes. The image output is
 `packages.aarch64-linux.frdm-imx95-all-features-sd-image`.
 Validate this feature image only from removable media. Do not write eMMC or
 persistent boot-selection state; rollback is booting the untouched known-good

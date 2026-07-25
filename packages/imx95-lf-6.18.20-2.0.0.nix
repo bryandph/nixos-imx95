@@ -289,22 +289,26 @@
         firmware = {
           path = "imx95/firmware/NeutronFirmware.elf";
           blobSha1 = "6696976e423992993313a8aa0c58c9d11c598cc7";
+          sha256 = "fa10588583d0b10c3adcb65de4b64883e922796737af3284687b628fcf84bf4e";
           size = 46388;
         };
         driver = {
           path = "imx95/library/libNeutronDriver.so";
           blobSha1 = "d21dfed5315033aec572ca4ce251be42f4aca65f";
+          sha256 = "eccbc544d83ceb7d8d2386ec47efc0d68488c76e65defb8d0931d3cfc79ab8c3";
           size = 68496;
         };
         headers = [
           {
             path = "imx95/include/NeutronDriver.h";
             blobSha1 = "36f295bc054245efd4f9815646be06e24fe11680";
+            sha256 = "7cec5384121068922c45a2db07f1483bc0ae2a556d1831c0fae18755c1c2b14c";
             size = 8880;
           }
           {
             path = "imx95/include/NeutronErrors.h";
             blobSha1 = "20239555722192d8b0d760e948c111b33f9ff653";
+            sha256 = "38eb5d3581352ab3a7af5a565d7e17b1522611cf468a763a973f191c08381636";
             size = 2693;
           }
         ];
@@ -405,7 +409,9 @@
         target = "imx95";
         forceDeterminism = true;
         distribution = "operator-supplied-until-license-review";
+        fileName = "mobilenet_v1_1.0_224_quant-neutron.tflite";
         sha256 = "946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba";
+        size = 4334416;
         identity = "sha256:946a912f68b1d8d85ce33911287cdc3eedaf4cdbd1b102d7ba0c125c65a0e9ba";
       };
     };

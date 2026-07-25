@@ -9,7 +9,6 @@
     pkgs,
     ...
   }: let
-    cfg = config.hardware.nxp.imx95.neutron;
     system = pkgs.stdenv.hostPlatform.system;
     release = import ../../../packages/imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
     kernel = inputs.self.packages.${system}.linux-imx95-neutron-reduced;
@@ -33,16 +32,33 @@
     delegateSource = inputs.self.packages.${system}.tflite-neutron-delegate-source;
     modelSource = inputs.self.packages.${system}.imx95-neutron-model-source;
     smokeRunner = inputs.self.packages.${system}.frdm-imx95-neutron-smoke-runner;
-    runtime = pkgs.callPackage ../../../packages/imx95-neutron-runtime.nix {
-      runtimeRoot = cfg.runtimeRoot;
-    };
+    runtime = pkgs.callPackage ../../../packages/imx95-neutron-runtime.nix {};
     delegate = pkgs.callPackage ../../../packages/tflite-neutron-delegate-imx95.nix {
       inherit runtime tensorflowLite;
       source = delegateSource;
     };
+    convertedModelSource = pkgs.requireFile {
+      name = release.neutron.model.converted.fileName;
+      sha256 = release.neutron.model.converted.sha256;
+      message = ''
+        ${release.neutron.model.converted.fileName} is an NXP eIQ Neutron SDK
+        converted model and cannot be downloaded by this flake or redistributed
+        through its public repository.
+
+        Follow the two-pass conversion and import procedure documented in the
+        Neutron section of README.md. The final import command is:
+
+          nix run --impure .#convert-imx95-neutron-model -- \
+            --accept-license \
+            /path/to/${release.neutron.converter.file} \
+            /path/to/neutron-converter \
+            /path/to/${release.neutron.model.sourceArchive.member} \
+            ${release.neutron.model.converted.sha256}
+      '';
+    };
     convertedModel =
       pkgs.runCommand "imx95-neutron-converted-model" {
-        src = cfg.convertedModel;
+        src = convertedModelSource;
         allowSubstitutes = false;
         preferLocalBuild = true;
         meta = {
@@ -53,9 +69,10 @@
         passthru.publicationPolicy = runtime.publicationPolicy;
       } ''
         test -f "$src"
+        test "$(stat -c %s "$src")" = ${toString release.neutron.model.converted.size}
         test "$(sha256sum "$src" | cut -d' ' -f1)" = \
-          ${lib.escapeShellArg cfg.convertedModelSha256}
-        install -Dm0444 "$src" "$out/share/models/${release.neutron.model.name}-neutron.tflite"
+          ${lib.escapeShellArg release.neutron.model.converted.sha256}
+        install -Dm0444 "$src" "$out/share/models/${release.neutron.model.converted.fileName}"
       '';
     deviceTreePackage = pkgs.runCommand "frdm-imx95-neutron-device-tree" {} ''
       install -Dm0444 \
@@ -89,21 +106,6 @@
       };
     };
   in {
-    options.hardware.nxp.imx95.neutron = {
-      runtimeRoot = lib.mkOption {
-        type = lib.types.path;
-        description = "Local store path produced by import-imx95-neutron-runtime.";
-      };
-      convertedModel = lib.mkOption {
-        type = lib.types.path;
-        description = "Local converted TFLite model produced by convert-imx95-neutron-model.";
-      };
-      convertedModelSha256 = lib.mkOption {
-        type = lib.types.strMatching "[0-9a-f]{64}";
-        description = "Reviewed two-pass SHA-256 identity of the converted model.";
-      };
-    };
-
     config = {
       boot.kernelPackages = lib.mkForce (pkgs.linuxPackagesFor nixosKernel);
       hardware.deviceTree.package = lib.mkForce deviceTreePackage;
