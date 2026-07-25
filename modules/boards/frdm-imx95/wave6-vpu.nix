@@ -12,6 +12,7 @@
     release = import ../../../packages/imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
     delta = release.multimedia.wave6.kernelDelta;
     kernel = inputs.self.packages.${system}.linux-imx95-wave6;
+    providerKind = config.boot.kernelPackages.kernel.providerKind or "upstream";
     nixosKernel =
       kernel
       // {
@@ -37,7 +38,10 @@
   in {
     options.hardware.nxp.imx95.wave6 = {
       providerKind = lib.mkOption {
-        type = lib.types.enum ["full-nxp-reference"];
+        type = lib.types.enum [
+          "full-nxp-reference"
+          "nxp-full-combined"
+        ];
         readOnly = true;
         description = "Evidence-selected release-pinned Wave6 kernel provider.";
       };
@@ -50,7 +54,10 @@
 
     config = {
       hardware.nxp.imx95.wave6 = {
-        providerKind = delta.providerSelection.selected;
+        providerKind =
+          if providerKind == "nxp-full-combined"
+          then providerKind
+          else delta.providerSelection.selected;
         firmwareMember = release.multimedia.wave6.firmware.member.fileName;
       };
       boot.kernelPackages = lib.mkForce (pkgs.linuxPackagesFor nixosKernel);
@@ -67,11 +74,19 @@
       ];
       system.build = {
         inherit deviceTreePackage firmware smoke;
+        wave6DeviceTreePackage = deviceTreePackage;
+        wave6Smoke = smoke;
       };
       assertions = [
         {
-          assertion = kernel.providerKind == delta.providerSelection.selected;
-          message = "Wave6 must use the explicitly selected release provider.";
+          assertion =
+            providerKind
+            == delta.providerSelection.selected
+            || providerKind == "nxp-full-combined";
+          message = ''
+            Wave6 requires either its explicitly selected release provider or
+            the reviewed combined NXP provider.
+          '';
         }
         {
           assertion =

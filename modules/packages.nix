@@ -32,6 +32,7 @@
           "nxp-imx95-m7-power-mode-demo"
           "nxp-imx95-wave6-firmware"
           "nixos-frdm-imx95-compatibility.img.zst"
+          "nixos-frdm-imx95-all-features.img.zst"
           "nixos-frdm-imx95-m7-remoteproc.img.zst"
           "nixos-frdm-imx95-multimedia.img.zst"
           "nixos-frdm-imx95.img.zst"

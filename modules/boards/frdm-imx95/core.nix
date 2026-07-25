@@ -6,6 +6,7 @@
     ...
   }: let
     requiredDtb = "freescale/imx95-15x15-frdm.dtb";
+    providerKind = config.boot.kernelPackages.kernel.providerKind or "upstream";
   in {
     boot = {
       kernelPackages = lib.mkDefault pkgs.linuxPackages_latest;
@@ -48,17 +49,19 @@
       {
         assertion =
           lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.0"
-          || (config.boot.kernelPackages.kernel.providerKind or "")
-          == "full-nxp-reference";
+          || builtins.elem providerKind [
+            "full-nxp-reference"
+            "nxp-full-combined"
+          ];
         message = ''
           FRDM-i.MX95 requires Linux 7.0 or newer for the upstream
           ${requiredDtb} board device tree, except when an optional feature
-          explicitly selects the release-pinned full NXP provider.
+          explicitly selects a reviewed release-pinned full NXP provider.
         '';
       }
       {
         assertion = config.hardware.deviceTree.name == requiredDtb;
-        message = "FRDM-i.MX95 must boot with the exact upstream ${requiredDtb}.";
+        message = "FRDM-i.MX95 must boot with the accepted ${requiredDtb} name.";
       }
     ];
   };

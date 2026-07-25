@@ -9,10 +9,12 @@
     m7BootContainer = inputs.self.packages.${system}.frdm-imx95-m7-source-boot-container;
     m7Ctl = inputs.self.packages.${system}.frdm-imx95-m7-ctl;
     m7SmokeFirmware = inputs.self.packages.${system}.frdm-imx95-m7-smoke;
+    providerKind = config.boot.kernelPackages.kernel.providerKind or "upstream";
+    usesCombinedNxpProvider = providerKind == "nxp-full-combined";
   in {
     hardware.nxp.imx95.bootContainer = lib.mkOverride 900 m7BootContainer;
 
-    hardware.deviceTree.overlays = [
+    hardware.deviceTree.overlays = lib.mkIf (!usesCombinedNxpProvider) [
       {
         name = "frdm-imx95-m7-remoteproc";
         filter = "imx95-15x15-frdm.dtb";
@@ -53,10 +55,17 @@
 
     assertions = [
       {
-        assertion = lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.1";
+        assertion =
+          usesCombinedNxpProvider
+          || (
+            providerKind
+            == "upstream"
+            && lib.versionAtLeast config.boot.kernelPackages.kernel.version "7.1"
+          );
         message = ''
-          FRDM-i.MX95 M7 remoteproc requires Linux 7.1 or newer for the
-          upstream fsl,imx95-cm7 driver and device-tree binding.
+          FRDM-i.MX95 M7 remoteproc requires either upstream Linux 7.1 or
+          newer, or the reviewed NXP combined provider with native
+          fsl,imx95-cm7 support.
         '';
       }
     ];

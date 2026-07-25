@@ -1,5 +1,6 @@
 {config, ...}: {
   flake.nixosModules = {
+    frdm-imx95-all-features = config.flake.modules.nixos.frdm-imx95-all-features;
     frdm-imx95-core = config.flake.modules.nixos.frdm-imx95-core;
     frdm-imx95-m7-remoteproc = config.flake.modules.nixos.frdm-imx95-m7-remoteproc;
     frdm-imx95-multimedia = config.flake.modules.nixos.frdm-imx95-multimedia;

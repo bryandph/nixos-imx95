@@ -25,6 +25,7 @@
     "frdm-imx95-source-sd-image-layout"
     "frdm-imx95-m7-compatibility-provider-evaluation"
     "frdm-imx95-neutron-smoke"
+    "nixos-frdm-imx95-all-features.img.zst"
     "nixos-frdm-imx95-multimedia.img.zst"
     "imx-boot-imx95"
     "imx95"
@@ -118,6 +119,24 @@ in {
       };
     }
     // lib.optionalAttrs neutronInputsConfigured {
+      frdm-imx95-all-features = mkBoard {
+        imageBaseName = "nixos-frdm-imx95-all-features";
+        modules = [
+          config.flake.modules.nixos.frdm-imx95-all-features
+          config.flake.modules.nixos.frdm-imx95-m7-remoteproc
+          config.flake.modules.nixos.frdm-imx95-multimedia
+          config.flake.modules.nixos.frdm-imx95-neutron-npu
+          config.flake.modules.nixos.frdm-imx95-wave6-vpu
+          {
+            hardware.nxp.imx95.neutron = {
+              runtimeRoot = builtins.storePath neutronRuntimeRoot;
+              convertedModel = builtins.storePath neutronConvertedModel;
+              convertedModelSha256 = neutronConvertedModelSha256;
+            };
+          }
+        ];
+      };
+
       frdm-imx95-neutron-npu = mkBoard {
         imageBaseName = "nixos-frdm-imx95-neutron-npu";
         modules = [
@@ -141,6 +160,21 @@ in {
     lib.mkIf (system == "aarch64-linux") (
       let
         board = config.flake.nixosConfigurations.frdm-imx95;
+        allFeaturesBoard = config.flake.nixosConfigurations.frdm-imx95-all-features;
+        allFeaturesRuntime = allFeaturesBoard.config.system.build.runtime;
+        allFeaturesSdImage = allFeaturesBoard.config.system.build.frdmImx95SdImage.overrideAttrs (old: {
+          allowSubstitutes = false;
+          preferLocalBuild = true;
+          passthru =
+            (old.passthru or {})
+            // {publicationPolicy = allFeaturesRuntime.publicationPolicy;};
+          meta =
+            (old.meta or {})
+            // {
+              license = allFeaturesRuntime.meta.license;
+              hydraPlatforms = [];
+            };
+        });
         m7Board = config.flake.nixosConfigurations.frdm-imx95-m7-remoteproc;
         multimediaBoard = config.flake.nixosConfigurations.frdm-imx95-multimedia;
         neutronBoard = config.flake.nixosConfigurations.frdm-imx95-neutron-npu;
@@ -302,6 +336,7 @@ in {
             default = sdImage;
           }
           // lib.optionalAttrs neutronInputsConfigured {
+            frdm-imx95-all-features-sd-image = allFeaturesSdImage;
             frdm-imx95-neutron-npu-sd-image = neutronSdImage;
           };
 
@@ -974,6 +1009,61 @@ in {
               '';
           }
           // lib.optionalAttrs neutronInputsConfigured {
+            all-features-module-composition = pkgs.runCommand "frdm-imx95-all-features-module-composition" {} ''
+              test ${lib.escapeShellArg allFeaturesBoard.config.boot.kernelPackages.kernel.providerKind} = \
+                nxp-full-combined
+              test ${lib.escapeShellArg allFeaturesBoard.config.hardware.nxp.imx95.wave6.providerKind} = \
+                nxp-full-combined
+              test ${lib.escapeShellArg allFeaturesBoard.config.hardware.deviceTree.name} = \
+                freescale/imx95-15x15-frdm.dtb
+              test ${
+                if
+                  lib.any
+                  (overlay: overlay.name == "frdm-imx95-m7-remoteproc")
+                  allFeaturesBoard.config.hardware.deviceTree.overlays
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if allFeaturesBoard.config.system.build.runtime.allowSubstitutes
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if allFeaturesBoard.config.system.build.firmware.allowSubstitutes
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if
+                  allFeaturesBoard.config.system.build.smoke.outPath
+                  == allFeaturesBoard.config.system.build.neutronSmoke.outPath
+                then "1"
+                else "0"
+              } = 1
+              touch "$out"
+            '';
+
+            all-features-image-policy = pkgs.runCommand "frdm-imx95-all-features-image-policy" {} ''
+              test ${
+                if allFeaturesSdImage.allowSubstitutes
+                then "0"
+                else "1"
+              } = 1
+              test ${
+                if allFeaturesSdImage.preferLocalBuild
+                then "1"
+                else "0"
+              } = 1
+              test ${
+                if allFeaturesSdImage.meta.license.redistributable
+                then "0"
+                else "1"
+              } = 1
+              test ${toString (builtins.length allFeaturesSdImage.meta.hydraPlatforms)} -eq 0
+              touch "$out"
+            '';
+
             neutron-image-policy = pkgs.runCommand "frdm-imx95-neutron-image-policy" {} ''
               test ${
                 if neutronSdImage.allowSubstitutes

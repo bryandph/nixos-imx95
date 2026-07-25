@@ -136,7 +136,8 @@ Wave6 is not present in the accepted upstream kernel. The separate exported
 matching FRDM device tree explicitly. A reduced backport remains rejected by
 the evidence gate until it builds, binds the physical VPU, and passes both
 codec paths with every NXP-only dependency accounted for. Mainline GPU results
-must not be attributed to this separate kernel target without rerunning them.
+must not be attributed to this separate kernel target without rerunning them;
+the composed all-features role below installs those probes for that purpose.
 
 The Wave6 driver uses standard V4L2 mem2mem userspace, but its
 `wave633c_codec_fw.bin` firmware member comes from NXP's licensed
@@ -328,12 +329,60 @@ decoded content to an issue. Power off, remove the evaluation SD, boot the
 retained accepted SD/eMMC baseline, and re-run its normal invariants. Rollback
 requires no eMMC repair because the evaluation procedure does not write it.
 
+## Combined FRDM feature evaluation
+
+The exported `frdm-imx95-all-features` module is the combined kernel and
+device-tree provider for a configuration that explicitly composes M7
+remoteproc, the open Mesa GPU and V4L2 JPEG probes, Wave6 VPU, and Neutron NPU.
+It selects the single `linux-imx95-all-features` package built from the pinned
+NXP 6.18.20 source. That source already carries the FRDM M7 node, the Wave6 and
+Neutron devices, and the Neutron reserved-memory overlay, so the mainline M7
+overlay is intentionally suppressed in this composition. The provider does
+not import the feature roles itself, preventing duplicate imports in parent
+fleet compositions. The default core and each standalone evaluation role
+remain separate and buildable.
+
+```nix
+{
+  imports = [
+    inputs.nixos-imx95.nixosModules.frdm-imx95-core
+    inputs.nixos-imx95.nixosModules.frdm-imx95-sd-image
+    inputs.nixos-imx95.nixosModules.frdm-imx95-all-features
+    inputs.nixos-imx95.nixosModules.frdm-imx95-m7-remoteproc
+    inputs.nixos-imx95.nixosModules.frdm-imx95-multimedia
+    inputs.nixos-imx95.nixosModules.frdm-imx95-neutron-npu
+    inputs.nixos-imx95.nixosModules.frdm-imx95-wave6-vpu
+  ];
+
+  hardware.nxp.imx95.neutron = {
+    runtimeRoot = /nix/store/operator-imported-runtime;
+    convertedModel = /nix/store/operator-imported-model;
+    convertedModelSha256 = "<reviewed-two-pass-sha256>";
+  };
+
+  users.users.<operator>.extraGroups = [
+    "neutron"
+    "video"
+  ];
+}
+```
+
+The Wave6 firmware and Neutron runtime/model boundaries remain unfree,
+non-redistributable, local-build preferred, substitute-disabled, and excluded
+from Hydra. Never publish the composed closure, SD image, imported source
+distribution, converted model, or a hardware report containing licensed
+bytes. With all three Neutron fixture variables described above set, the
+conditional image output is
+`packages.aarch64-linux.frdm-imx95-all-features-sd-image`.
+
 ## Optional M7 remoteproc development
 
 The exported `frdm-imx95-m7-remoteproc` NixOS module adds the upstream
 `fsl,imx95-cm7` remoteproc node to the mainline FRDM device tree. It is not
 part of the default board composition, does not install or auto-start
-firmware, and does not add an M7 payload to the boot container.
+firmware, and does not add an M7 payload to the boot container. When composed
+through `frdm-imx95-all-features`, the reviewed NXP device tree supplies that
+node directly and the module does not apply its mainline overlay.
 
 The first public firmware target is the original MIT-licensed Embassy-Rust
 application under `firmware/frdm-imx95-m7-smoke`, exposed as the

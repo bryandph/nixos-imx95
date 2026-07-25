@@ -13,6 +13,7 @@
     system = pkgs.stdenv.hostPlatform.system;
     release = import ../../../packages/imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
     kernel = inputs.self.packages.${system}.linux-imx95-neutron-reduced;
+    providerKind = config.boot.kernelPackages.kernel.providerKind or "upstream";
     nixosKernel =
       kernel
       // {
@@ -127,6 +128,8 @@
 
       system.build = {
         inherit convertedModel delegate deviceTreePackage runtime smoke;
+        neutronDeviceTreePackage = deviceTreePackage;
+        neutronSmoke = smoke;
       };
 
       assertions = [
@@ -135,8 +138,14 @@
           message = "The Neutron role must preserve the accepted FRDM DT filename.";
         }
         {
-          assertion = kernel.providerKind == "reduced-mainline";
-          message = "The Neutron role must use the provider selected by identical checks.";
+          assertion =
+            providerKind
+            == "reduced-mainline"
+            || providerKind == "nxp-full-combined";
+          message = ''
+            The Neutron role requires either its reviewed reduced provider or
+            the reviewed combined NXP provider.
+          '';
         }
       ];
     };

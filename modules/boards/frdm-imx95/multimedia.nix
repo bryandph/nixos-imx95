@@ -12,6 +12,7 @@
     release = import ../../../packages/imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
     gpuSmoke = inputs.self.packages.${system}.frdm-imx95-gpu-smoke;
     jpegSmoke = inputs.self.packages.${system}.frdm-imx95-jpeg-smoke;
+    providerKind = config.boot.kernelPackages.kernel.providerKind or "upstream";
   in {
     hardware.graphics.enable = true;
     users.groups.video = {};
@@ -30,9 +31,13 @@
     assertions = [
       {
         assertion =
-          (config.boot.kernelPackages.kernel.providerKind or "upstream")
-          == "upstream";
-        message = "Mainline multimedia must retain the upstream kernel provider.";
+          providerKind
+          == "upstream"
+          || providerKind == "nxp-full-combined";
+        message = ''
+          Open multimedia probes require either the upstream provider or the
+          reviewed combined NXP provider.
+        '';
       }
       {
         assertion = release.multimedia.mainline.gpu.userspace == "mesa";
