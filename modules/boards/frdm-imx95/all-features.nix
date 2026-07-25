@@ -31,7 +31,15 @@
         "$out/freescale/imx95-15x15-frdm.dtb"
     '';
   in {
-    boot.kernelPackages = lib.mkOverride 40 (pkgs.linuxPackagesFor nixosKernel);
+    boot = {
+      kernelPackages = lib.mkOverride 40 (pkgs.linuxPackagesFor nixosKernel);
+      initrd.availableKernelModules = lib.mkForce [
+        "mmc_block"
+        "sdhci"
+        "sdhci-esdhc-imx"
+      ];
+      initrd.kernelModules = lib.mkForce [];
+    };
     hardware.deviceTree.package = lib.mkOverride 40 deviceTreePackage;
 
     system.build = {
@@ -44,6 +52,20 @@
       {
         assertion = config.boot.kernelPackages.kernel.providerKind == "nxp-full-combined";
         message = "The all-features role must have one reviewed combined NXP kernel owner.";
+      }
+      {
+        assertion =
+          config.boot.initrd.availableKernelModules
+          == [
+            "mmc_block"
+            "sdhci"
+            "sdhci-esdhc-imx"
+          ];
+        message = "The combined NXP initrd must request only the FRDM SD boot modules.";
+      }
+      {
+        assertion = config.boot.initrd.kernelModules == [];
+        message = "The direct SD/ext4 root must not pull generic device-mapper initrd modules.";
       }
       {
         assertion =

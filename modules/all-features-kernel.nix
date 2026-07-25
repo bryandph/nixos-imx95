@@ -36,6 +36,9 @@
             grep -q 'drivers/staging/neutron/neutron.ko' "$modulesBuiltin"
             grep -q 'drivers/mxc/vpu/wave6/wave6-vpu-ctrl.ko' "$modulesBuiltin"
             grep -q 'drivers/mxc/vpu/wave6/wave6.ko' "$modulesBuiltin"
+            grep -q 'drivers/mmc/core/mmc_block.ko' "$modulesBuiltin"
+            grep -q 'drivers/mmc/host/sdhci.ko' "$modulesBuiltin"
+            grep -q 'drivers/mmc/host/sdhci-esdhc-imx.ko' "$modulesBuiltin"
             grep -q 'drivers/gpu/drm/panthor/panthor.ko' "$modulesOrder"
             grep -q 'drivers/media/platform/nxp/imx-jpeg/mxc-jpeg-encdec.ko' "$modulesOrder"
 

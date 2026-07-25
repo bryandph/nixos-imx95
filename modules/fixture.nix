@@ -542,6 +542,11 @@ in {
                 else "0"
               } = 1
               test ${
+                if allFeaturesBoard.config.boot.initrd.kernelModules == []
+                then "1"
+                else "0"
+              } = 1
+              test ${
                 if lib.hasInfix "/sys/dev/block/" board.config.systemd.services.expand-root-partition.script
                 then "1"
                 else "0"
@@ -1016,6 +1021,17 @@ in {
                 nxp-full-combined
               test ${lib.escapeShellArg allFeaturesBoard.config.hardware.deviceTree.name} = \
                 freescale/imx95-15x15-frdm.dtb
+              test ${
+                if
+                  allFeaturesBoard.config.boot.initrd.availableKernelModules
+                  == [
+                    "mmc_block"
+                    "sdhci"
+                    "sdhci-esdhc-imx"
+                  ]
+                then "1"
+                else "0"
+              } = 1
               test ${
                 if
                   lib.any
