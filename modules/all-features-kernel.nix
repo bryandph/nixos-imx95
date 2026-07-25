@@ -30,6 +30,8 @@
             grep -q '^CONFIG_NEUTRON=y$' "$configFile"
             grep -q '^CONFIG_NETFILTER_XT_MATCH_COMMENT=m$' "$configFile"
             grep -q '^CONFIG_NETFILTER_XT_MATCH_PKTTYPE=m$' "$configFile"
+            grep -q '^CONFIG_IP_NF_MATCH_RPFILTER=m$' "$configFile"
+            grep -q '^CONFIG_IP6_NF_MATCH_RPFILTER=m$' "$configFile"
             grep -q '^CONFIG_MXC_MUR=y$' "$configFile"
             grep -q '^CONFIG_MXC_VIDEO_WAVE6_CTRL=y$' "$configFile"
             grep -q '^CONFIG_MXC_VIDEO_WAVE6=y$' "$configFile"
@@ -46,6 +48,8 @@
             grep -q 'drivers/media/platform/nxp/imx-jpeg/mxc-jpeg-encdec.ko' "$modulesOrder"
             grep -q 'net/netfilter/xt_comment.ko' "$modulesOrder"
             grep -q 'net/netfilter/xt_pkttype.ko' "$modulesOrder"
+            grep -q 'net/ipv4/netfilter/ipt_rpfilter.ko' "$modulesOrder"
+            grep -q 'net/ipv6/netfilter/ip6t_rpfilter.ko' "$modulesOrder"
             if grep -q 'drivers/gpu/arm/midgard/mali_kbase.ko' "$modulesOrder"; then
               echo "combined kernel unexpectedly contains the NXP kbase module" >&2
               exit 1

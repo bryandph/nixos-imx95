@@ -37,6 +37,8 @@
 
       NETFILTER_XT_MATCH_COMMENT = module;
       NETFILTER_XT_MATCH_PKTTYPE = module;
+      IP_NF_MATCH_RPFILTER = module;
+      IP6_NF_MATCH_RPFILTER = module;
 
       MXC_MUR = yes;
       MXC_VIDEO_WAVE6_CTRL = yes;
