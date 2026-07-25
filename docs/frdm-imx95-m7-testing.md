@@ -11,7 +11,8 @@ eMMC installation or start the M7 automatically.
 3. Build and write the
    `packages.aarch64-linux.frdm-imx95-m7-remoteproc-sd-image` image to a
    specifically identified SD card.
-4. Select SD boot and cold boot the board. Do not overwrite the eMMC baseline.
+4. Select SD boot and cold boot the board. Do not write eMMC or persistent
+   boot-selection state.
 
 J1 is attached to the NixOS host `cm5devkit`, not to the operator's macOS
 machine. The bridge is present there as USB device `1a86:55d5` and provides
@@ -108,7 +109,7 @@ starts it again. Every transition has a 15-second timeout.
 
 For each cycle, retain the M7 UART log and the output of `diagnose`. Acceptance
 requires six online A55 CPUs, no failed systemd units, working SCMI and OP-TEE,
-working Ethernet/SSH, and unchanged eMMC recovery media.
+working Ethernet/SSH, and an untouched known-good installed/eMMC fleet system.
 
 ## M7-local idle and A55 power boundary
 
@@ -141,5 +142,6 @@ Then stop the M7 if it is running:
 sudo frdm-imx95-m7-ctl stop
 ```
 
-Rollback is a cold boot with the board returned to the retained eMMC boot
-selection. The optional module never modifies the boot container or eMMC.
+Rollback is powering off, removing the evaluation SD, and cold booting the
+untouched known-good installed/eMMC fleet system. The optional module never
+modifies eMMC or persistent boot-selection state.

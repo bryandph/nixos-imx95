@@ -185,10 +185,10 @@ frdm-imx95-wave6-smoke
 
 The command discovers Wave6 encoder and decoder roles and performs generated
 H.264 and H.265 V4L2 round trips. It fails if no identified Wave6 hardware path
-participates. Physical acceptance must use removable media, preserve the
-accepted SD/eMMC recovery image, and must not alter eMMC or boot-source
-selection. Rollback removes the optional module and boots the retained
-mainline removable medium.
+participates. Validate the feature image only from independently identified
+removable media, without writing eMMC or persistent boot-selection state.
+Rollback is powering off, removing the evaluation medium, and booting the
+untouched known-good installed/eMMC fleet system.
 
 ## Optional Neutron NPU evaluation
 
@@ -282,8 +282,8 @@ absent from the public/default flake surface.
 
 Identify the removable target independently with `findmnt`, `lsblk`, and the
 MMC sysfs device type; never infer it from a previous `mmcblk` number. Write
-only that unmounted SD medium. Retain the accepted SD/eMMC baseline and do not
-write either eMMC hardware boot partition.
+only that unmounted SD medium. Do not write the eMMC user area, either eMMC
+hardware boot partition, or persistent boot-selection state.
 
 Capture both the A55 console (`ttyLP0`) and the M33/System Manager UART from
 power-on. After a cold boot, collect at least:
@@ -326,8 +326,9 @@ On failure, preserve the two UART logs, smoke JSON, `journalctl -b -k`,
 `systemctl --failed`, mount identity, CPU/memory state, device permissions, and
 hashes or store paths of selected inputs. Never attach proprietary bytes or
 decoded content to an issue. Power off, remove the evaluation SD, boot the
-retained accepted SD/eMMC baseline, and re-run its normal invariants. Rollback
-requires no eMMC repair because the evaluation procedure does not write it.
+untouched known-good installed/eMMC fleet system, and re-run its normal
+invariants. Rollback requires no repair because the evaluation procedure does
+not write eMMC or persistent boot-selection state.
 
 ## Combined FRDM feature evaluation
 
@@ -374,6 +375,9 @@ distribution, converted model, or a hardware report containing licensed
 bytes. With all three Neutron fixture variables described above set, the
 conditional image output is
 `packages.aarch64-linux.frdm-imx95-all-features-sd-image`.
+Validate this feature image only from removable media. Do not write eMMC or
+persistent boot-selection state; rollback is booting the untouched known-good
+installed/eMMC fleet system.
 
 ## Optional M7 remoteproc development
 
@@ -421,11 +425,18 @@ wrong extlinux filesystem. The ext4 root uses the stable `NIXOS_SD` identity
 and expands on first boot by resolving its kernel major/minor identity through
 sysfs rather than assuming a device-node minor number.
 
-No flashing app is provided. Preserve an accepted source-built SD card as the
-recovery path before installing eMMC. The complete-container provider remains
+No flashing app is provided. These outputs are generic board and evaluation
+artifacts: they do not carry fleet identity, operator SSH keys, or secrets.
+Feature acceptance uses removable media only and leaves the installed/eMMC
+fleet system untouched for rollback. The complete-container provider remains
 available if source assembly needs to be ruled out during diagnosis.
 
-## Install an accepted image to eMMC
+## Optional generic board installation to eMMC
+
+This destructive procedure is for deliberate generic board provisioning, not
+feature-image acceptance or fleet rollout. Fleet identity, SSH authorization,
+and secrets belong to the consuming fleet configuration and are not provided
+by this repository. Feature evaluations must not use this procedure.
 
 Treat eMMC installation as two separate writes: the generated image goes to
 the eMMC user area, while NXP's signed boot container goes to eMMC boot
@@ -433,8 +444,9 @@ partition 1 through the ROM's USB serial downloader. The latter step removes
 any dependency on a factory-installed boot container that happened to remain
 in the hardware boot partition.
 
-First boot and accept the image from SD. Keep that card unchanged as the
-recovery path. From the running SD system:
+First boot and accept the generic image from an independently identified SD
+card. Establish verified offline backups and a reviewed out-of-band recovery
+path before changing eMMC. From the running SD system:
 
 1. Use `findmnt /`, `findmnt /boot`, `lsblk`, and
    `/sys/block/mmcblk*/device/type` to distinguish the mounted SD device from
@@ -444,7 +456,8 @@ recovery path. From the running SD system:
    (`mmcblkXboot0` and `mmcblkXboot1`), the partition table, sizes, and hashes
    to separate recovery storage. A backup of `mmcblkX` alone does **not**
    include the hardware boot partitions.
-3. Prove that the retained SD card still boots before writing eMMC.
+3. Prove the recovery environment and saved-artifact inventory before writing
+   eMMC.
 4. Decompress the accepted image into the independently verified, unmounted
    eMMC user-area device. Flush it, then hash exactly the image-length prefix
    read back from that device and compare it with the decompressed image.
@@ -519,18 +532,20 @@ necessary, and power-cycle. Accept the result only after:
 - `systemctl --failed` is empty; and
 - a second eMMC boot passes the same checks.
 
-Rollback means powering off, reinserting the retained accepted SD card, and
-selecting SD boot. Keep the user-area and boot-partition backups offline.
+For feature validation, rollback is instead powering off, removing the
+evaluation SD, and booting the untouched known-good installed/eMMC fleet
+system. Recovery from this optional destructive provisioning workflow uses the
+verified offline user-area and boot-partition backups.
 
-Factory restoration is a separate, reviewed operation. Boot the accepted SD,
-repeat the device-identity preflight, and verify every saved artifact before
-writing anything. Restore the user-area image only to the inactive eMMC user
-area. Restore `boot0` and `boot1` to their matching hardware partitions,
-temporarily clearing each partition's `force_ro` sysfs control only for its
-write and restoring it immediately afterward. Reapply the saved eMMC boot
-configuration if it differs, then perform length-limited readback hashes of
-all three areas before selecting eMMC boot. Neither the backups nor licensed
-NXP artifacts may be published.
+Factory restoration is a separate, reviewed operation. Boot an independently
+verified recovery environment, repeat the device-identity preflight, and
+verify every saved artifact before writing anything. Restore the user-area
+image only to the inactive eMMC user area. Restore `boot0` and `boot1` to their
+matching hardware partitions, temporarily clearing each partition's
+`force_ro` sysfs control only for its write and restoring it immediately
+afterward. Reapply the saved eMMC boot configuration if it differs, then
+perform length-limited readback hashes of all three areas before selecting
+eMMC boot. Neither the backups nor licensed NXP artifacts may be published.
 
 ## Consumer modules
 
