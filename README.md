@@ -214,12 +214,15 @@ frdm-imx95-neutron-smoke
 ```
 
 The CPU run must explicitly report non-acceptance. The Neutron run is accepted
-only when its JSON report records output tolerance, a nonzero delegated-node
-count, and movement in the independent Neutron debugfs performance counters.
-A successful benchmark exit or CPU fallback is not accelerator evidence.
-Confirm separately that a user outside the `neutron` group cannot open the
-device. Repeat the complete invariant and smoke procedure after a second cold
-boot.
+only when its JSON report records the declared five-byte maximum quantized
+output delta, the same top output, a nonzero delegated-node count, and movement
+in the independent Neutron debugfs performance counters. The smoke wrapper uses
+the dynamically linked compatibility benchmark from
+`packages/imx95-neutron-benchmark.cc` so the executable and external delegate
+share one TensorFlow Lite runtime. A successful benchmark exit or CPU fallback
+is not accelerator evidence. Confirm separately that a user outside the
+`neutron` group cannot open the device. Repeat the complete invariant and smoke
+procedure after a second cold boot.
 
 On failure, preserve the two UART logs, smoke JSON, `journalctl -b -k`,
 `systemctl --failed`, mount identity, CPU/memory state, device permissions, and

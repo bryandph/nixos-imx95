@@ -65,7 +65,7 @@
       name = "frdm-imx95-neutron-smoke";
       runtimeInputs = [pkgs.coreutils];
       text = ''
-        export NEUTRON_BENCHMARK=${tensorflowLite}/bin/benchmark_model
+        export NEUTRON_BENCHMARK=${tensorflowLite}/bin/benchmark_model_dynamic
         export NEUTRON_CPU_MODEL=${modelSource}/${modelSource.modelPath}
         export NEUTRON_DELEGATE=${delegate}/lib/libneutron_delegate.so
         export NEUTRON_MODEL=${convertedModel}/share/models/${release.neutron.model.name}-neutron.tflite
@@ -114,6 +114,8 @@
         SUBSYSTEM=="neutron", KERNEL=="neutron[0-9]*", GROUP="neutron", MODE="0660"
       '';
       systemd.tmpfiles.rules = [
+        "z /sys/kernel/debug 0710 root neutron - -"
+        "z /sys/kernel/debug/neutron 0750 root neutron - -"
         "z /sys/kernel/debug/neutron/perf_counters 0640 root neutron - -"
       ];
 

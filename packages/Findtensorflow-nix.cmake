@@ -18,5 +18,6 @@ set_target_properties(
 
 list(APPEND NEUTRON_DELEGATE_DEPENDENCIES TensorFlow::tensorflow-lite)
 list(APPEND NEUTRON_DELEGATE_SRCS
+  "${TFLITE_SOURCE_DIR}/delegates/utils.cc"
   "${TFLITE_SOURCE_DIR}/tools/command_line_flags.cc"
 )

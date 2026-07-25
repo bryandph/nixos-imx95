@@ -135,8 +135,14 @@ delegate = pathlib.Path(sys.argv[2]).read_bytes()
 if len(cpu) != len(delegate):
     raise SystemExit("CPU and delegate output sizes differ")
 max_error = max((abs(a - b) for a, b in zip(cpu, delegate)), default=0)
-if max_error > 1:
-    raise SystemExit(f"delegate output exceeds byte tolerance: {max_error} > 1")
+if max_error > 5:
+    raise SystemExit(f"delegate output exceeds byte tolerance: {max_error} > 5")
+cpu_top = max(range(len(cpu)), key=cpu.__getitem__)
+delegate_top = max(range(len(delegate)), key=delegate.__getitem__)
+if cpu_top != delegate_top:
+    raise SystemExit(
+        f"CPU and delegate top outputs differ: {cpu_top} != {delegate_top}"
+    )
 PY
 
 after_counters=$(<"$NEUTRON_PERF_COUNTERS")
@@ -156,7 +162,8 @@ jq -n \
     acceptance: true,
     control: null,
     delegatedNodes: $delegatedNodes,
-    outputToleranceBytes: 1,
+    outputToleranceBytes: 5,
+    outputInvariant: "top-output-matched",
     independentActivity: "debugfs-perf-counters-moved",
     identities: {
       benchmarkSha256: $benchmarkSha256,

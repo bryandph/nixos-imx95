@@ -7,6 +7,7 @@
   source,
   stdenv,
   tensorflowLite,
+  tensorflowLiteSource ? tensorflowLite.src,
 }: let
   release = import ./imx95-lf-6.18.20-2.0.0.nix {inherit lib;};
   delegate = release.neutron.delegate;
@@ -41,7 +42,7 @@ in
       "-DNEUTRON_INTEGRATION=ON"
       "-DNEUTRON_DRIVER_PATH=${runtime}"
       "-DNEUTRON_DRIVER_LIB=${runtime}/lib/libNeutronDriver.so"
-      "-DTFLITE_SOURCE_DIR=${tensorflowLite.src}/tensorflow/lite"
+      "-DTFLITE_SOURCE_DIR=${tensorflowLiteSource}/tensorflow/lite"
       "-DTFLITE_LIB_LOC=${tensorflowLite}/lib/libtensorflowlite.so"
       "-DTFLITE_INCLUDE_DIR=${tensorflowLite}/include"
     ];

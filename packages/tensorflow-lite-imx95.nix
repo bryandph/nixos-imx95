@@ -83,6 +83,18 @@ in
         cp -R "$bazelOut/external/pthreadpool/include/." "$out/include/"
         cp -R "$bazelOut/external/FP16/include/." "$out/include/"
         cp -R "$bazelOut/external/FXdiv/include/." "$out/include/"
+
+        "$CXX" \
+          -std=c++17 \
+          -O2 \
+          -I"$out/include" \
+          ${./imx95-neutron-benchmark.cc} \
+          -L"$out/lib" \
+          -Wl,-rpath,"$out/lib" \
+          -ltensorflowlite \
+          -ldl \
+          -pthread \
+          -o "$out/bin/benchmark_model_dynamic"
       '';
     };
 
