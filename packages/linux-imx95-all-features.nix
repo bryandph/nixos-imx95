@@ -40,6 +40,17 @@
       IP_NF_MATCH_RPFILTER = module;
       IP6_NF_MATCH_RPFILTER = module;
 
+      PCI_IMX6_HOST = yes;
+      BLK_DEV_NVME = yes;
+
+      I2C_IMX_LPI2C = yes;
+      SND_SOC_FSL_SAI = module;
+      SND_SOC_FSL_MQS = module;
+      SND_SOC_FSL_MICFIL = module;
+      SND_SOC_IMX_CARD = module;
+      SND_SOC_DMIC = module;
+      SND_AUDIO_GRAPH_CARD2 = module;
+
       MXC_MUR = yes;
       MXC_VIDEO_WAVE6_CTRL = yes;
       MXC_VIDEO_WAVE6 = yes;
@@ -49,10 +60,12 @@
     extraPassthru = {
       providerKind = "nxp-full-combined";
       capabilities = [
+        "audio"
         "gpu-panthor"
         "jpeg"
         "m7-remoteproc"
         "neutron"
+        "nvme"
         "wave6"
       ];
       releaseMapping = release;

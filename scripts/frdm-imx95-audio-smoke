@@ -1,0 +1,71 @@
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  frdm-imx95-audio-smoke list
+  frdm-imx95-audio-smoke onboard [duration-seconds]
+
+The onboard probe uses the stable MICFIL ALSA card ID, records a bounded stereo
+sample, and removes its temporary WAV file.
+EOF
+}
+
+require_card() {
+  local card_id=$1
+
+  if ! grep -Eq "\\[[[:space:]]*${card_id}[[:space:]]*\\]" /proc/asound/cards; then
+    echo "ALSA card ID '$card_id' was not found" >&2
+    cat /proc/asound/cards >&2
+    return 1
+  fi
+}
+
+record_sample() {
+  local card_id=$1
+  local format=$2
+  local rate=$3
+  local duration=$4
+  local output=$5
+
+  require_card "$card_id"
+  arecord \
+    -D "hw:CARD=$card_id,DEV=0" \
+    -t wav \
+    -f "$format" \
+    -r "$rate" \
+    -c 2 \
+    -d "$duration" \
+    "$output"
+
+  if [ "$(stat -c %s "$output")" -le 44 ]; then
+    echo "recorded WAV contains no PCM payload" >&2
+    return 1
+  fi
+}
+
+duration=${2:-3}
+if ! [[ "$duration" =~ ^[1-9][0-9]?$ ]]; then
+  echo "duration must be an integer from 1 through 99 seconds" >&2
+  exit 2
+fi
+
+case ${1:-} in
+  list)
+    cat /proc/asound/cards
+    arecord -l
+    aplay -l
+    ;;
+  onboard)
+    card_id=${FRDM_IMX95_MICFIL_CARD_ID:-micfilaudio}
+    work_dir=$(mktemp -d "${TMPDIR:-/tmp}/frdm-imx95-onboard-audio.XXXXXX")
+    trap 'rm -rf -- "$work_dir"' EXIT
+    sample="$work_dir/onboard-mics.wav"
+    record_sample "$card_id" S32_LE 16000 "$duration" "$sample"
+    echo "FRDM-i.MX95 onboard stereo microphone smoke accepted for CARD=$card_id"
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

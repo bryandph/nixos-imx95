@@ -40,11 +40,11 @@
       ];
       initrd.kernelModules = lib.mkForce [];
     };
-    hardware.deviceTree.package = lib.mkOverride 40 deviceTreePackage;
+    hardware.deviceTree.dtbSource = lib.mkOverride 40 deviceTreePackage;
 
     system.build = {
       allFeaturesKernel = kernel;
-      deviceTreePackage = lib.mkOverride 40 deviceTreePackage;
+      deviceTreePackage = lib.mkOverride 40 config.hardware.deviceTree.package;
       smoke = lib.mkOverride 40 config.system.build.neutronSmoke;
     };
 
@@ -72,10 +72,12 @@
           builtins.all
           (capability: builtins.elem capability kernel.capabilities)
           [
+            "audio"
             "gpu-panthor"
             "jpeg"
             "m7-remoteproc"
             "neutron"
+            "nvme"
             "wave6"
           ];
         message = "The combined NXP kernel must declare every composed hardware capability.";

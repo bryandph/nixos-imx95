@@ -1,0 +1,64 @@
+set -euo pipefail
+
+found_controller=0
+found_namespace=0
+
+echo "PCI NVMe endpoints:"
+lspci -Dnnk -d ::0108
+echo
+echo "NVMe inventory:"
+nvme list
+
+for controller_path in /sys/class/nvme/nvme[0-9]*; do
+  [ -e "$controller_path" ] || continue
+  controller=${controller_path##*/}
+  if ! [[ "$controller" =~ ^nvme[0-9]+$ ]]; then
+    continue
+  fi
+
+  found_controller=1
+  controller_node="/dev/$controller"
+  driver_link="$controller_path/device/driver"
+  driver=
+  if [ -L "$driver_link" ]; then
+    driver=$(basename "$(readlink -f "$driver_link")")
+  fi
+  if [ "$driver" != nvme ]; then
+    echo "$controller is not bound to the nvme driver (found '${driver:-none}')" >&2
+    exit 1
+  fi
+
+  pci_address=$(readlink -f "$controller_path/device" |
+    grep -oE '[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\\.[0-7]' |
+    tail -n 1)
+  echo
+  echo "Controller $controller (${pci_address:-non-PCI identity}):"
+  if [ -n "$pci_address" ]; then
+    lspci -Dnnk -s "$pci_address"
+  fi
+  nvme id-ctrl "$controller_node"
+  nvme smart-log "$controller_node"
+
+  for namespace_path in "$controller_path"/"${controller}"n[0-9]*; do
+    [ -e "$namespace_path" ] || continue
+    namespace=${namespace_path##*/}
+    namespace_node="/dev/$namespace"
+    if [ ! -b "$namespace_node" ]; then
+      echo "$namespace is present in sysfs but $namespace_node is not a block device" >&2
+      exit 1
+    fi
+    found_namespace=1
+    echo
+    echo "Namespace $namespace:"
+    nvme id-ns "$namespace_node"
+    blockdev --getsize64 "$namespace_node"
+  done
+done
+
+if [ "$found_controller" -ne 1 ] || [ "$found_namespace" -ne 1 ]; then
+  echo "no complete PCIe NVMe controller/namespace path was found" >&2
+  exit 1
+fi
+
+echo
+echo "FRDM-i.MX95 NVMe read-only inventory accepted; no block-device writes were performed."

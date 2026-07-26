@@ -119,9 +119,11 @@ in {
         imageBaseName = "nixos-frdm-imx95-all-features";
         modules = [
           config.flake.modules.nixos.frdm-imx95-all-features
+          config.flake.modules.nixos.frdm-imx95-audio
           config.flake.modules.nixos.frdm-imx95-m7-remoteproc
           config.flake.modules.nixos.frdm-imx95-multimedia
           config.flake.modules.nixos.frdm-imx95-neutron-npu
+          config.flake.modules.nixos.frdm-imx95-nvme
           config.flake.modules.nixos.frdm-imx95-wave6-vpu
         ];
       };
