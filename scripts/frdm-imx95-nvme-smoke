@@ -29,7 +29,7 @@ for controller_path in /sys/class/nvme/nvme[0-9]*; do
   fi
 
   pci_address=$(readlink -f "$controller_path/device" |
-    grep -oE '[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\\.[0-7]' |
+    grep -oE '[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[0-7]' |
     tail -n 1)
   echo
   echo "Controller $controller (${pci_address:-non-PCI identity}):"
