@@ -108,7 +108,8 @@
   in {
     config = {
       boot.kernelPackages = lib.mkForce (pkgs.linuxPackagesFor nixosKernel);
-      hardware.deviceTree.package = lib.mkForce deviceTreePackage;
+      hardware.deviceTree.package =
+        lib.mkIf (providerKind != "nxp-full-combined") (lib.mkForce deviceTreePackage);
       hardware.firmware = [runtime];
       hardware.firmwareCompression = "none";
 

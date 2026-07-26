@@ -61,7 +61,8 @@
         firmwareMember = release.multimedia.wave6.firmware.member.fileName;
       };
       boot.kernelPackages = lib.mkForce (pkgs.linuxPackagesFor nixosKernel);
-      hardware.deviceTree.package = lib.mkForce deviceTreePackage;
+      hardware.deviceTree.package =
+        lib.mkIf (providerKind != "nxp-full-combined") (lib.mkForce deviceTreePackage);
       hardware.firmware = [firmware];
       hardware.firmwareCompression = "none";
       users.groups.video = {};
